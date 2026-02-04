@@ -27,7 +27,7 @@
         </div>
 
         <div class="glass-panel p-8 rounded-3xl shadow-2xl">
-            <form action="{{ route('login') }}" method="POST">
+            <form action="{{ route('login.submit') }}" method="POST">
                 @csrf
                 <div class="mb-6">
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
