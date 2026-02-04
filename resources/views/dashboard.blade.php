@@ -48,9 +48,22 @@
                     <button class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg smooth-transition font-medium text-sm">
                         <i class="fas fa-rocket mr-2"></i>Deploy Command
                     </button>
-                    <div class="relative">
-                        <div class="h-10 w-10 rounded-full bg-gradient-to-r from-cyan-500 to-primary-500 flex items-center justify-center text-white font-bold">
+                    <div class="relative group">
+                        <button class="h-10 w-10 rounded-full bg-gradient-to-r from-cyan-500 to-primary-500 flex items-center justify-center text-white font-bold shadow-lg hover:ring-4 hover:ring-primary-100 transition-all">
                             {{ substr(auth()->user()->name ?? 'AD', 0, 2) }}
+                        </button>
+                        <!-- Dropdown -->
+                        <div class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl py-2 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all z-[60] border border-gray-100">
+                            <div class="px-4 py-2 border-b border-gray-100">
+                                <p class="text-xs text-gray-400">Signed in as</p>
+                                <p class="text-sm font-bold text-gray-800 truncate">{{ auth()->user()->email }}</p>
+                            </div>
+                            <form action="{{ route('logout') }}" method="POST">
+                                @csrf
+                                <button type="submit" class="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors">
+                                    <i class="fas fa-sign-out-alt mr-2"></i> Sign Out
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
