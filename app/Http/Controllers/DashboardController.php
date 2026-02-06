@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Device;
 use Illuminate\Http\Request;
+use App\Http\Controllers\Api\CommandController;
 
 class DashboardController extends Controller
 {
@@ -38,7 +39,7 @@ class DashboardController extends Controller
         ]);
 
         // Use CommandController to send the message
-        $commandController = app()->make(Api\CommandController::class);
+        $commandController = app()->make(CommandController::class);
         $response = $commandController->sendToAll($request);
 
         if ($response->getStatusCode() === 200) {
