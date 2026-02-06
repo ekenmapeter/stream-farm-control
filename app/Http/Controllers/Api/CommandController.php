@@ -16,8 +16,14 @@ class CommandController extends Controller
 
     public function __construct()
     {
+        $credentialsPath = base_path(config('firebase.credentials'));
+
+        if (!file_exists($credentialsPath)) {
+            throw new \RuntimeException("Firebase credentials file not found at: {$credentialsPath}. Please check your .env file and ensure the file exists.");
+        }
+
         $factory = (new Factory)
-            ->withServiceAccount(storage_path('app/streamfarmcontrol-firebase-adminsdk-fbsvc-fc6392ba58.json'));
+            ->withServiceAccount($credentialsPath);
 
         $this->messaging = $factory->createMessaging();
     }
