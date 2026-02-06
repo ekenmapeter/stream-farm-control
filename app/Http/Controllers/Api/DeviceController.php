@@ -26,8 +26,10 @@ class DeviceController extends Controller
             ], 422);
         }
 
-        // Check if device already exists
-        $device = Device::where('device_id', $request->device_id)->first();
+        // Check if device exists by ID or by Token
+        $device = Device::where('device_id', $request->device_id)
+                      ->orWhere('fcm_token', $request->fcm_token)
+                      ->first();
 
         if ($device) {
             // Update existing device
