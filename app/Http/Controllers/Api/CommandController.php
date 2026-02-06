@@ -57,8 +57,8 @@ class CommandController extends Controller
             ], 422);
         }
 
-        // Get all online devices
-        $devices = Device::where('status', 'online')->get();
+        // Get all active devices (online or already streaming)
+        $devices = Device::whereIn('status', ['online', 'streaming'])->get();
 
         if ($devices->isEmpty()) {
             return response()->json([
@@ -70,14 +70,17 @@ class CommandController extends Controller
         // Collect all FCM tokens
         $tokens = $devices->pluck('fcm_token')->filter()->toArray();
 
-        // Create the FCM message
+        // Create the FCM message with visibility and high priority
         $message = CloudMessage::new()
+            ->withNotification(Notification::create('Stream Farm', "Executing: " . ucfirst($request->action)))
             ->withData([
                 'action' => $request->action,
                 'spotify_uri' => $request->spotify_uri ?? '',
                 'timestamp' => now()->timestamp,
                 'command_id' => Str::uuid()->toString()
-            ]);
+            ])
+            ->withAndroidConfig(['priority' => 'high'])
+            ->withApnsConfig(['headers' => ['apns-priority' => '10']]);
 
         // Send multicast message
         $report = $this->messaging->sendMulticast($message, $tokens);
@@ -110,12 +113,15 @@ class CommandController extends Controller
         }
 
         $message = CloudMessage::withTarget('token', $device->fcm_token)
+            ->withNotification(Notification::create('Stream Farm', "Manual Command: " . ucfirst($request->action)))
             ->withData([
                 'action' => $request->action,
                 'spotify_uri' => $request->spotify_uri ?? '',
                 'timestamp' => now()->timestamp,
                 'command_id' => Str::uuid()->toString()
-            ]);
+            ])
+            ->withAndroidConfig(['priority' => 'high'])
+            ->withApnsConfig(['headers' => ['apns-priority' => '10']]);
 
         try {
             $this->messaging->send($message);
@@ -162,12 +168,15 @@ class CommandController extends Controller
         }
 
         $message = CloudMessage::new()
+            ->withNotification(Notification::create('Stream Farm', "Group Command: " . ucfirst($request->action)))
             ->withData([
                 'action' => $request->action,
                 'spotify_uri' => $request->spotify_uri ?? '',
                 'timestamp' => now()->timestamp,
                 'command_id' => Str::uuid()->toString()
-            ]);
+            ])
+            ->withAndroidConfig(['priority' => 'high'])
+            ->withApnsConfig(['headers' => ['apns-priority' => '10']]);
 
         $report = $this->messaging->sendMulticast($message, $tokens);
 
