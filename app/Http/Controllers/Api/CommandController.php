@@ -18,8 +18,21 @@ class CommandController extends Controller
     {
         $credentialsPath = base_path(config('firebase.credentials'));
 
+        // Smart search: If the configured file is missing, look for ANY firebase json in storage/app
         if (!file_exists($credentialsPath)) {
-            throw new \RuntimeException("Firebase credentials file not found at: {$credentialsPath}. Please check your .env file and ensure the file exists.");
+            $storagePath = storage_path('app');
+            $files = glob($storagePath . '/*.json');
+            
+            foreach ($files as $file) {
+                if (str_contains($file, 'firebase-adminsdk')) {
+                    $credentialsPath = $file;
+                    break;
+                }
+            }
+        }
+
+        if (!file_exists($credentialsPath)) {
+            throw new \RuntimeException("Firebase credentials file not found. We checked the config path AND searched storage/app. Please ensure your Firebase JSON file is in storage/app.");
         }
 
         $factory = (new Factory)
