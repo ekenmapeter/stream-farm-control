@@ -35,7 +35,10 @@ class DashboardController extends Controller
         // Simple validation
         $request->validate([
             'action' => 'required|in:play,pause,stop,open',
-            'spotify_uri' => 'required_if:action,play,open|string'
+            'platform' => 'nullable|in:spotify,youtube',
+            'spotify_uri' => 'nullable|string',
+            'youtube_url' => 'nullable|string',
+            'media_url' => 'nullable|string'
         ]);
 
         // Use CommandController to send the message

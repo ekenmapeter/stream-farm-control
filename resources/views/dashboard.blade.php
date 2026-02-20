@@ -195,36 +195,54 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                                        <i class="fas fa-play-circle mr-2 text-primary-500"></i>Action Type
+                                        <i class="fas fa-play-circle mr-2 text-primary-500"></i>Platform & Action
                                     </label>
+                                    <div class="grid grid-cols-2 gap-3 mb-3">
+                                        <label class="platform-btn flex items-center p-3 border rounded-xl cursor-pointer smooth-transition border-primary-500 bg-primary-50" data-platform="spotify">
+                                            <input type="radio" name="platform" value="spotify" class="hidden" checked>
+                                            <i class="fab fa-spotify text-green-500 mr-2"></i>
+                                            <span class="font-medium">Spotify</span>
+                                        </label>
+                                        <label class="platform-btn flex items-center p-3 border rounded-xl cursor-pointer smooth-transition" data-platform="youtube">
+                                            <input type="radio" name="platform" value="youtube" class="hidden">
+                                            <i class="fab fa-youtube text-red-500 mr-2"></i>
+                                            <span class="font-medium">YouTube</span>
+                                        </label>
+                                    </div>
                                     <div class="grid grid-cols-2 gap-3">
-                                        <label class="flex items-center p-4 border rounded-xl cursor-pointer smooth-transition hover:border-primary-300 hover:bg-primary-50">
-                                            <input type="radio" name="action" value="play" class="h-5 w-5 text-primary-600" checked>
-                                            <div class="ml-3">
-                                                <p class="font-medium text-gray-900">Play</p>
-                                                <p class="text-xs text-gray-500">Start playback</p>
+                                        <label class="flex items-center p-3 border rounded-xl cursor-pointer smooth-transition hover:border-primary-300 hover:bg-primary-50">
+                                            <input type="radio" name="action" value="play" class="h-4 w-4 text-primary-600" checked>
+                                            <div class="ml-2">
+                                                <p class="text-sm font-medium text-gray-900">Play</p>
                                             </div>
                                         </label>
-                                        <label class="flex items-center p-4 border rounded-xl cursor-pointer smooth-transition hover:border-primary-300 hover:bg-primary-50">
-                                            <input type="radio" name="action" value="pause" class="h-5 w-5 text-primary-600">
-                                            <div class="ml-3">
-                                                <p class="font-medium text-gray-900">Pause</p>
-                                                <p class="text-xs text-gray-500">Pause playback</p>
+                                        <label class="flex items-center p-3 border rounded-xl cursor-pointer smooth-transition hover:border-primary-300 hover:bg-primary-50">
+                                            <input type="radio" name="action" value="pause" class="h-4 w-4 text-primary-600">
+                                            <div class="ml-2">
+                                                <p class="text-sm font-medium text-gray-900">Pause</p>
                                             </div>
                                         </label>
                                     </div>
                                 </div>
-                                <div>
-                                    <label for="spotify_uri" class="block text-sm font-medium text-gray-700 mb-2">
-                                        <i class="fab fa-spotify mr-2 text-green-500"></i>Spotify URI
-                                    </label>
-                                    <div class="relative">
-                                        <input type="text" id="spotify_uri" name="spotify_uri" value="spotify:track:4cOdK2wGLETKBW3PvgPWqT" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 smooth-transition">
-                                        <button type="button" onclick="document.getElementById('spotify_uri').value='spotify:playlist:37i9dQZF1DXcBWIGoYBM5M'" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg smooth-transition">
-                                            Playlist
-                                        </button>
+                                <div id="media-url-container">
+                                    <div id="spotify-input-group">
+                                        <label for="spotify_uri" class="block text-sm font-medium text-gray-700 mb-2">
+                                            <i class="fab fa-spotify mr-2 text-green-500"></i>Spotify URI
+                                        </label>
+                                        <div class="relative">
+                                            <input type="text" id="spotify_uri" name="spotify_uri" value="spotify:track:4cOdK2wGLETKBW3PvgPWqT" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 smooth-transition">
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-2">Example: spotify:track:xxx</p>
                                     </div>
-                                    <p class="text-xs text-gray-500 mt-2">Format: spotify:track:xxx or spotify:playlist:xxx</p>
+                                    <div id="youtube-input-group" class="hidden">
+                                        <label for="youtube_url" class="block text-sm font-medium text-gray-700 mb-2">
+                                            <i class="fab fa-youtube mr-2 text-red-500"></i>YouTube URL
+                                        </label>
+                                        <div class="relative">
+                                            <input type="text" id="youtube_url" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 smooth-transition">
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-2">Example: https://youtu.be/xxx</p>
+                                    </div>
                                 </div>
                             </div>
                             <button type="submit" class="w-full bg-gradient-to-r from-primary-600 to-blue-500 hover:from-primary-700 hover:to-blue-600 text-white font-semibold py-4 px-6 rounded-xl smooth-transition flex items-center justify-center shadow-lg hover:shadow-xl">
@@ -239,34 +257,36 @@
                     <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
                         <i class="fas fa-bolt mr-2 text-amber-500"></i> Quick Actions
                     </h3>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <button class="quick-command p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl text-center smooth-transition hover:shadow-md hover:border-green-300" data-action="play" data-uri="spotify:track:4cOdK2wGLETKBW3PvgPWqT">
-                            <div class="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-                                <i class="fas fa-play text-green-600"></i>
+                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                        <button class="quick-command p-4 bg-white border border-gray-200 rounded-xl text-center smooth-transition hover:shadow-md hover:border-green-300" data-action="play" data-platform="spotify" data-uri="spotify:track:4cOdK2wGLETKBW3PvgPWqT">
+                            <div class="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
+                                <i class="fab fa-spotify text-green-600"></i>
                             </div>
-                            <p class="font-medium text-green-800">Play Track</p>
-                            <p class="text-xs text-green-600 mt-1">Sample Song</p>
+                            <p class="text-sm font-semibold text-gray-900">Spotify Hit</p>
                         </button>
-                        <button class="quick-command p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl text-center smooth-transition hover:shadow-md hover:border-blue-300" data-action="play" data-uri="spotify:playlist:37i9dQZF1DXcBWIGoYBM5M">
-                            <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-3">
-                                <i class="fas fa-list-music text-blue-600"></i>
+                        <button class="quick-command p-4 bg-white border border-gray-200 rounded-xl text-center smooth-transition hover:shadow-md hover:border-red-300" data-action="play" data-platform="youtube" data-uri="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+                            <div class="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2">
+                                <i class="fab fa-youtube text-red-600"></i>
                             </div>
-                            <p class="font-medium text-blue-800">Play Playlist</p>
-                            <p class="text-xs text-blue-600 mt-1">Today's Top Hits</p>
+                            <p class="text-sm font-semibold text-gray-900">YouTube Hit</p>
                         </button>
-                        <button class="quick-command p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl text-center smooth-transition hover:shadow-md hover:border-amber-300" data-action="pause">
-                            <div class="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
-                                <i class="fas fa-pause text-amber-600"></i>
+                        <button class="quick-command p-4 bg-white border border-gray-200 rounded-xl text-center smooth-transition hover:shadow-md hover:border-blue-300" data-action="pause">
+                            <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2">
+                                <i class="fas fa-pause text-blue-600"></i>
                             </div>
-                            <p class="font-medium text-amber-800">Pause All</p>
-                            <p class="text-xs text-amber-600 mt-1">Stop playback</p>
+                            <p class="text-sm font-semibold text-gray-900">Pause All</p>
                         </button>
-                        <button class="quick-command p-4 bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 rounded-xl text-center smooth-transition hover:shadow-md hover:border-red-300" data-action="stop">
-                            <div class="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
-                                <i class="fas fa-stop text-red-600"></i>
+                        <button class="quick-command p-4 bg-white border border-gray-200 rounded-xl text-center smooth-transition hover:shadow-md hover:border-orange-300" data-action="stop">
+                            <div class="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-2">
+                                <i class="fas fa-stop text-orange-600"></i>
                             </div>
-                            <p class="font-medium text-red-800">Stop All</p>
-                            <p class="text-xs text-red-600 mt-1">End all streams</p>
+                            <p class="text-sm font-semibold text-gray-900">Stop All</p>
+                        </button>
+                        <button class="quick-command p-4 bg-gradient-to-r from-primary-600 to-blue-500 rounded-xl text-center smooth-transition shadow-lg text-white" data-action="open">
+                            <div class="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2 text-white">
+                                <i class="fas fa-external-link-alt"></i>
+                            </div>
+                            <p class="text-sm font-semibold">Wake App</p>
                         </button>
                     </div>
                 </div>
@@ -354,10 +374,33 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Platform Toggle Logic
+        document.querySelectorAll('.platform-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Reset all
+                document.querySelectorAll('.platform-btn').forEach(b => {
+                    b.classList.remove('border-primary-500', 'bg-primary-50');
+                });
+                // Set active
+                this.classList.add('border-primary-500', 'bg-primary-50');
+                
+                const platform = this.dataset.platform;
+                
+                if (platform === 'spotify') {
+                    document.getElementById('spotify-input-group').classList.remove('hidden');
+                    document.getElementById('youtube-input-group').classList.add('hidden');
+                } else {
+                    document.getElementById('spotify-input-group').classList.add('hidden');
+                    document.getElementById('youtube-input-group').classList.remove('hidden');
+                }
+            });
+        });
+
         // Quick command buttons
         document.querySelectorAll('.quick-command').forEach(button => {
             button.addEventListener('click', function() {
                 const action = this.dataset.action;
+                const platform = this.dataset.platform || 'spotify';
                 const uri = this.dataset.uri || '';
 
                 // Add visual feedback
@@ -374,7 +417,8 @@
                     },
                     body: JSON.stringify({
                         action: action,
-                        spotify_uri: uri
+                        platform: platform,
+                        media_url: uri
                     })
                 })
                 .then(response => response.json())
@@ -422,7 +466,8 @@
                         },
                         body: JSON.stringify({
                             action: 'play',
-                            spotify_uri: uri
+                            platform: 'spotify', // Default for now
+                            media_url: uri
                         })
                     })
                     .then(response => response.json())

@@ -46,7 +46,10 @@ class CommandController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'action' => 'required|in:play,pause,stop,open',
-            'spotify_uri' => 'required_if:action,play,open|string',
+            'platform' => 'nullable|in:spotify,youtube',
+            'spotify_uri' => 'nullable|string',
+            'youtube_url' => 'nullable|string',
+            'media_url' => 'nullable|string',
             'message' => 'nullable|string'
         ]);
 
@@ -70,17 +73,37 @@ class CommandController extends Controller
         // Collect all FCM tokens
         $tokens = $devices->pluck('fcm_token')->filter()->toArray();
 
-        // Create the FCM message with visibility and high priority
+        // Create the FCM message with silent data and high priority
+        $mediaUrl = $request->media_url ?? $request->spotify_uri ?? $request->youtube_url ?? '';
+        $platform = $request->platform ?? 'spotify';
+        $action = $request->action;
+
         $message = CloudMessage::new()
-            ->withNotification(Notification::create('Stream Farm', "Executing: " . ucfirst($request->action)))
             ->withData([
-                'action' => $request->action,
-                'spotify_uri' => $request->spotify_uri ?? '',
+                'command' => $platform == 'spotify' ? 'play_spotify' : ($platform == 'youtube' ? 'play_youtube' : $action),
+                'track_id' => $mediaUrl, // Aliases for different naming conventions
+                'youtube_url' => $mediaUrl,
+                'media_url' => $mediaUrl,
+                'action' => $action,
+                'platform' => $platform,
                 'timestamp' => now()->timestamp,
                 'command_id' => Str::uuid()->toString()
             ])
-            ->withAndroidConfig(['priority' => 'high'])
-            ->withApnsConfig(['headers' => ['apns-priority' => '10']]);
+            ->withAndroidConfig([
+                'priority' => 'high',
+                'ttl' => '3600s'
+            ])
+            ->withApnsConfig([
+                'headers' => [
+                    'apns-priority' => '10',
+                    'apns-push-type' => 'background'
+                ],
+                'payload' => [
+                    'aps' => [
+                        'content-available' => 1
+                    ]
+                ]
+            ]);
 
         // Send multicast message
         $report = $this->messaging->sendMulticast($message, $tokens);
@@ -105,23 +128,36 @@ class CommandController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'action' => 'required|in:play,pause,stop,open',
-            'spotify_uri' => 'required_if:action,play,open|string'
+            'platform' => 'nullable|in:spotify,youtube',
+            'spotify_uri' => 'nullable|string',
+            'youtube_url' => 'nullable|string',
+            'media_url' => 'nullable|string'
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
 
+        $mediaUrl = $request->media_url ?? $request->spotify_uri ?? $request->youtube_url ?? '';
+        $platform = $request->platform ?? 'spotify';
+        $action = $request->action;
+
         $message = CloudMessage::withTarget('token', $device->fcm_token)
-            ->withNotification(Notification::create('Stream Farm', "Manual Command: " . ucfirst($request->action)))
             ->withData([
-                'action' => $request->action,
-                'spotify_uri' => $request->spotify_uri ?? '',
+                'command' => $platform == 'spotify' ? 'play_spotify' : ($platform == 'youtube' ? 'play_youtube' : $action),
+                'track_id' => $mediaUrl,
+                'youtube_url' => $mediaUrl,
+                'media_url' => $mediaUrl,
+                'action' => $action,
+                'platform' => $platform,
                 'timestamp' => now()->timestamp,
                 'command_id' => Str::uuid()->toString()
             ])
             ->withAndroidConfig(['priority' => 'high'])
-            ->withApnsConfig(['headers' => ['apns-priority' => '10']]);
+            ->withApnsConfig([
+                'headers' => ['apns-priority' => '10', 'apns-push-type' => 'background'],
+                'payload' => ['aps' => ['content-available' => 1]]
+            ]);
 
         try {
             $this->messaging->send($message);
@@ -150,7 +186,10 @@ class CommandController extends Controller
             'device_ids' => 'required|array',
             'device_ids.*' => 'exists:devices,id',
             'action' => 'required|in:play,pause,stop,open',
-            'spotify_uri' => 'required_if:action,play,open|string'
+            'platform' => 'nullable|in:spotify,youtube',
+            'spotify_uri' => 'nullable|string',
+            'youtube_url' => 'nullable|string',
+            'media_url' => 'nullable|string'
         ]);
 
         if ($validator->fails()) {
@@ -167,16 +206,26 @@ class CommandController extends Controller
             ], 400);
         }
 
+        $mediaUrl = $request->media_url ?? $request->spotify_uri ?? $request->youtube_url ?? '';
+        $platform = $request->platform ?? 'spotify';
+        $action = $request->action;
+
         $message = CloudMessage::new()
-            ->withNotification(Notification::create('Stream Farm', "Group Command: " . ucfirst($request->action)))
             ->withData([
-                'action' => $request->action,
-                'spotify_uri' => $request->spotify_uri ?? '',
+                'command' => $platform == 'spotify' ? 'play_spotify' : ($platform == 'youtube' ? 'play_youtube' : $action),
+                'track_id' => $mediaUrl,
+                'youtube_url' => $mediaUrl,
+                'media_url' => $mediaUrl,
+                'action' => $action,
+                'platform' => $platform,
                 'timestamp' => now()->timestamp,
                 'command_id' => Str::uuid()->toString()
             ])
             ->withAndroidConfig(['priority' => 'high'])
-            ->withApnsConfig(['headers' => ['apns-priority' => '10']]);
+            ->withApnsConfig([
+                'headers' => ['apns-priority' => '10', 'apns-push-type' => 'background'],
+                'payload' => ['aps' => ['content-available' => 1]]
+            ]);
 
         $report = $this->messaging->sendMulticast($message, $tokens);
 
