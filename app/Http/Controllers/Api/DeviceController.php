@@ -26,12 +26,18 @@ class DeviceController extends Controller
             ], 422);
         }
 
-        // Check if device exists by ID or by Token
-        $device = Device::where('device_id', $request->device_id)
+        // Check if device exists by ID or by Token (include soft-deleted ones)
+        $device = Device::withTrashed()
+                      ->where('device_id', $request->device_id)
                       ->orWhere('fcm_token', $request->fcm_token)
                       ->first();
 
         if ($device) {
+            // Restore if it was deleted
+            if ($device->trashed()) {
+                $device->restore();
+            }
+            
             // Update existing device
             $device->update([
                 'fcm_token' => $request->fcm_token,
