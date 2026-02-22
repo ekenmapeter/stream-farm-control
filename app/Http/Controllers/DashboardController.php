@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Device;
+use App\Models\DeviceLog;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\CommandController;
 
@@ -20,13 +21,27 @@ class DashboardController extends Controller
         $offlineCount = Device::where('status', 'offline')->count();
         $totalCount = $devices->count();
 
+        // Recent logs (last 24h)
+        $recentLogs = DeviceLog::with('device')
+            ->orderBy('created_at', 'desc')
+            ->where('created_at', '>=', now()->subHours(24))
+            ->limit(100)
+            ->get();
+
+        // Error count (last 24h)
+        $errorCount = DeviceLog::errors()
+            ->where('created_at', '>=', now()->subHours(24))
+            ->count();
+
         // Pass data to the view
         return view('dashboard', [
-            'devices' => $devices,
-            'onlineCount' => $onlineCount,
+            'devices'        => $devices,
+            'onlineCount'    => $onlineCount,
             'streamingCount' => $streamingCount,
-            'offlineCount' => $offlineCount,
-            'totalCount' => $totalCount
+            'offlineCount'   => $offlineCount,
+            'totalCount'     => $totalCount,
+            'recentLogs'     => $recentLogs,
+            'errorCount'     => $errorCount,
         ]);
     }
 
