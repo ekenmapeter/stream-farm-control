@@ -532,6 +532,52 @@
         </div>
     </div>
 
+    <!-- Play on Device Modal -->
+    <div id="playDeviceModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div class="bg-gradient-to-r from-primary-600 to-blue-500 px-6 py-4 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-white"><i class="fas fa-play-circle mr-2"></i>Play on Device</h3>
+                <button onclick="document.getElementById('playDeviceModal').classList.add('hidden')" class="text-white/80 hover:text-white transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="modal_device_id">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Platform</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="modal-platform-btn flex items-center p-3 border rounded-xl cursor-pointer smooth-transition border-primary-500 bg-primary-50" data-platform="spotify">
+                                <input type="radio" name="modal_platform" value="spotify" class="hidden" checked>
+                                <i class="fab fa-spotify text-green-500 mr-2"></i>
+                                <span class="font-medium">Spotify</span>
+                            </label>
+                            <label class="modal-platform-btn flex items-center p-3 border rounded-xl cursor-pointer smooth-transition" data-platform="youtube">
+                                <input type="radio" name="modal_platform" value="youtube" class="hidden">
+                                <i class="fab fa-youtube text-red-500 mr-2"></i>
+                                <span class="font-medium">YouTube</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="modal-spotify-group">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Spotify URI</label>
+                        <input type="text" id="modal_spotify_uri" value="spotify:track:4cOdK2wGLETKBW3PvgPWqT" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none">
+                    </div>
+                    <div id="modal-youtube-group" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">YouTube URL</label>
+                        <input type="text" id="modal_youtube_url" placeholder="https://www.youtube.com/watch?v=..." class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none">
+                    </div>
+                </div>
+                <div class="mt-8 flex space-x-3">
+                    <button onclick="document.getElementById('playDeviceModal').classList.add('hidden')" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-colors">Cancel</button>
+                    <button id="confirmPlayDevice" class="flex-1 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold shadow-lg shadow-primary-200 transition-all flex items-center justify-center">
+                        <i class="fas fa-play mr-2"></i>Play Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Manual Register Submit
@@ -649,49 +695,76 @@
             });
         });
 
-        // Send to single device
+        // Modal Platform Toggle
+        document.querySelectorAll('.modal-platform-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.modal-platform-btn').forEach(b => {
+                    b.classList.remove('border-primary-500', 'bg-primary-50');
+                });
+                this.classList.add('border-primary-500', 'bg-primary-50');
+                const platform = this.dataset.platform;
+                if (platform === 'spotify') {
+                    document.getElementById('modal-spotify-group').classList.remove('hidden');
+                    document.getElementById('modal-youtube-group').classList.add('hidden');
+                    this.querySelector('input').checked = true;
+                } else {
+                    document.getElementById('modal-spotify-group').classList.add('hidden');
+                    document.getElementById('modal-youtube-group').classList.remove('hidden');
+                    this.querySelector('input').checked = true;
+                }
+            });
+        });
+
+        // Send to single device - Open Modal
         document.querySelectorAll('.send-single').forEach(button => {
             button.addEventListener('click', function() {
                 const deviceId = this.dataset.deviceId;
-                const uri = prompt('Enter Spotify URI:', 'spotify:track:4cOdK2wGLETKBW3PvgPWqT');
+                document.getElementById('modal_device_id').value = deviceId;
+                document.getElementById('playDeviceModal').classList.remove('hidden');
+            });
+        });
 
-                if (uri) {
-                    // Add visual feedback
-                    const originalColor = this.style.color;
-                    const originalBg = this.style.background;
-                    this.style.background = 'linear-gradient(to right, #3b82f6, #06b6d4)';
-                    this.style.color = 'white';
+        // Confirm Play on Single Device
+        document.getElementById('confirmPlayDevice').addEventListener('click', function() {
+            const deviceId = document.getElementById('modal_device_id').value;
+            const platform = document.querySelector('input[name="modal_platform"]:checked').value;
+            const uri = platform === 'spotify' 
+                ? document.getElementById('modal_spotify_uri').value 
+                : document.getElementById('modal_youtube_url').value;
 
-                    fetch(`/api/commands/send-to-device/${deviceId}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                        },
-                        body: JSON.stringify({
-                            action: 'play',
-                            platform: 'spotify', // Default for now
-                            media_url: uri
-                        })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        showNotification('Command sent to device!', 'success');
+            if (!uri) {
+                showNotification('Please enter a URL/URI', 'error');
+                return;
+            }
 
-                        // Reset button
-                        setTimeout(() => {
-                            this.style.background = originalBg;
-                            this.style.color = originalColor;
-                            setTimeout(() => location.reload(), 1000);
-                        }, 1000);
-                    })
-                    .catch(error => {
-                        showNotification('Error: ' + error, 'error');
-                        this.style.background = originalBg;
-                        this.style.color = originalColor;
-                    });
-                }
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+
+            fetch(`/api/commands/send-to-device/${deviceId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    action: 'play',
+                    platform: platform,
+                    media_url: uri
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                showNotification('Command sent to device!', 'success');
+                document.getElementById('playDeviceModal').classList.add('hidden');
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-play mr-2"></i>Play Now';
+                setTimeout(() => location.reload(), 1000);
+            })
+            .catch(error => {
+                showNotification('Error: ' + error, 'error');
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-play mr-2"></i>Play Now';
             });
         });
 

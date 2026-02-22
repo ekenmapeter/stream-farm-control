@@ -74,8 +74,16 @@ class CommandController extends Controller
         $tokens = $devices->pluck('fcm_token')->filter()->toArray();
 
         // Create the FCM message with silent data and high priority
-        $mediaUrl = $request->media_url ?? $request->spotify_uri ?? $request->youtube_url ?? '';
         $platform = $request->platform ?? 'spotify';
+        $mediaUrl = $request->media_url;
+        
+        if (!$mediaUrl) {
+            $mediaUrl = ($platform === 'spotify') ? $request->spotify_uri : $request->youtube_url;
+        }
+        
+        // Final fallback if still empty
+        $mediaUrl = $mediaUrl ?? '';
+        
         $action = $request->action;
 
         $message = CloudMessage::new()
@@ -140,8 +148,14 @@ class CommandController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        $mediaUrl = $request->media_url ?? $request->spotify_uri ?? $request->youtube_url ?? '';
         $platform = $request->platform ?? 'spotify';
+        $mediaUrl = $request->media_url;
+        
+        if (!$mediaUrl) {
+            $mediaUrl = ($platform === 'spotify') ? $request->spotify_uri : $request->youtube_url;
+        }
+        
+        $mediaUrl = $mediaUrl ?? '';
         $action = $request->action;
 
         $message = CloudMessage::withTarget('token', $device->fcm_token)
@@ -209,8 +223,14 @@ class CommandController extends Controller
             ], 400);
         }
 
-        $mediaUrl = $request->media_url ?? $request->spotify_uri ?? $request->youtube_url ?? '';
         $platform = $request->platform ?? 'spotify';
+        $mediaUrl = $request->media_url;
+        
+        if (!$mediaUrl) {
+            $mediaUrl = ($platform === 'spotify') ? $request->spotify_uri : $request->youtube_url;
+        }
+        
+        $mediaUrl = $mediaUrl ?? '';
         $action = $request->action;
 
         $message = CloudMessage::new()
