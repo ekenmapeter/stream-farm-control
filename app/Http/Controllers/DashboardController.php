@@ -16,7 +16,7 @@ class DashboardController extends Controller
                          ->get();
 
         // Calculate counts
-        $onlineCount = Device::where('status', 'online')->count();
+        $onlineCount = Device::whereIn('status', ['online', 'streaming'])->count();
         $streamingCount = Device::where('status', 'streaming')->count();
         $offlineCount = Device::where('status', 'offline')->count();
         $totalCount = $devices->count();

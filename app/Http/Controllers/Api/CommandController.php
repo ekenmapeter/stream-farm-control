@@ -108,9 +108,11 @@ class CommandController extends Controller
         // Send multicast message
         $report = $this->messaging->sendMulticast($message, $tokens);
 
-        // Update devices status
+        // Update devices status based on action
+        $newStatus = ($action === 'stop' || $action === 'pause') ? 'online' : 'streaming';
+        
         Device::whereIn('id', $devices->pluck('id'))
-            ->update(['status' => 'streaming', 'last_seen' => now()]);
+            ->update(['status' => $newStatus, 'last_seen' => now()]);
 
         return response()->json([
             'success' => true,
@@ -162,8 +164,9 @@ class CommandController extends Controller
         try {
             $this->messaging->send($message);
 
+            $newStatus = ($action === 'stop' || $action === 'pause') ? 'online' : 'streaming';
             $device->update([
-                'status' => 'streaming',
+                'status' => $newStatus,
                 'last_seen' => now()
             ]);
 
@@ -229,8 +232,9 @@ class CommandController extends Controller
 
         $report = $this->messaging->sendMulticast($message, $tokens);
 
+        $newStatus = ($action === 'stop' || $action === 'pause') ? 'online' : 'streaming';
         Device::whereIn('id', $devices->pluck('id'))
-            ->update(['status' => 'streaming', 'last_seen' => now()]);
+            ->update(['status' => $newStatus, 'last_seen' => now()]);
 
         return response()->json([
             'success' => true,
