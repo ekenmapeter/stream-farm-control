@@ -271,7 +271,7 @@
                     </div>
                 </div>
 
-                <!-- Quick Commands -->
+                <!-- Quick Commands
                 <div class="mt-8">
                     <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
                         <i class="fas fa-bolt mr-2 text-amber-500"></i> Quick Actions
@@ -308,7 +308,7 @@
                             <p class="text-sm font-semibold">Wake App</p>
                         </button>
                     </div>
-                </div>
+                </div> -->
             </div>
 
             <!-- Devices Panel -->
