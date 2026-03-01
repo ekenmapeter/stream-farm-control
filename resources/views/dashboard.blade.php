@@ -339,6 +339,7 @@
                                         </div>
                                         <div class="flex space-x-1 flex-shrink-0">
                                             <button class="send-single h-8 w-8 rounded-lg bg-primary-50 text-primary-600 hover:bg-primary-100 smooth-transition flex items-center justify-center" data-device-id="{{ $device->id }}" title="Assign Track"><i class="fas fa-play text-xs"></i></button>
+                                            <button class="edit-device h-8 w-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 smooth-transition flex items-center justify-center" data-device-id="{{ $device->id }}" data-device-name="{{ $device->name }}" title="Rename Device"><i class="fas fa-edit text-xs"></i></button>
                                             <button class="remove-device h-8 w-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 smooth-transition flex items-center justify-center" data-device-id="{{ $device->id }}" title="Remove"><i class="fas fa-trash-alt text-xs"></i></button>
                                         </div>
                                     </div>

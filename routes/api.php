@@ -9,6 +9,7 @@ Route::prefix('devices')->group(function () {
     Route::post('/register', [DeviceController::class, 'register']);
     Route::post('/heartbeat/{device}', [DeviceController::class, 'heartbeat']);
     Route::get('/', [DeviceController::class, 'index']);
+    Route::put('/{device}', [DeviceController::class, 'update']);
     Route::delete('/{device}', [DeviceController::class, 'destroy']);
 
     // Device logging

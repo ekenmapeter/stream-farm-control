@@ -190,6 +190,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // ── Edit Device ──────────────────────────────────────────────────────
+    document.querySelectorAll('.edit-device').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const newName = prompt('Enter new phone name:', this.dataset.deviceName);
+            if (!newName || newName.trim() === '' || newName === this.dataset.deviceName) return;
+            
+            fetch(`/api/devices/${this.dataset.deviceId}`, { 
+                method: 'PUT', 
+                headers: headers,
+                body: JSON.stringify({ name: newName.trim() })
+            })
+            .then(r => r.json())
+            .then(data => { 
+                if (data.success) {
+                    showNotification(data.message || 'Renamed successfully', 'success'); 
+                    setTimeout(() => location.reload(), 800); 
+                } else {
+                    showNotification('Failed to rename', 'error');
+                }
+            })
+            .catch(err => showNotification('Error: ' + err, 'error'));
+        });
+    });
+
     // ── Log Level Filter ─────────────────────────────────────────────────
     document.querySelectorAll('.log-filter').forEach(btn => {
         btn.addEventListener('click', function() {

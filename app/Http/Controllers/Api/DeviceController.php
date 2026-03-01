@@ -102,4 +102,29 @@ class DeviceController extends Controller
             'message' => 'Device removed successfully'
         ]);
     }
+
+    // Update a device (e.g., rename)
+    public function update(Request $request, Device $device)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $device->update([
+            'name' => $request->name,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Device updated successfully',
+            'device' => $device
+        ]);
+    }
 }
