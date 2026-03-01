@@ -12,6 +12,22 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        // Auto-cleanup: Mark devices offline if no heartbeat/action in the last 15 minutes
+        $offlineCutoff = now()->subMinutes(15);
+        $staleDevices = Device::where('last_seen', '<', $offlineCutoff)
+                              ->where('status', '!=', 'offline')
+                              ->get();
+        
+        if ($staleDevices->count() > 0) {
+            $staleDeviceIds = $staleDevices->pluck('id');
+            // Mark devices offline
+            Device::whereIn('id', $staleDeviceIds)->update(['status' => 'offline']);
+            // Stop any active assignments for these devices
+            DeviceAssignment::whereIn('device_id', $staleDeviceIds)
+                            ->whereIn('status', ['pending', 'playing', 'paused'])
+                            ->update(['status' => 'stopped']);
+        }
+
         // Get all devices with their current assignment
         $devices = Device::with('currentAssignment')
                          ->orderBy('status', 'desc')

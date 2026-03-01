@@ -111,6 +111,8 @@ class AssignmentController extends Controller
 
                     $this->messaging->send($message);
 
+                    // Mark assignment as playing immediately since FCM was sent successfully
+                    $assignment->update(['status' => 'playing', 'started_at' => now()]);
                     $device->update(['status' => 'streaming', 'last_seen' => now()]);
                     $sendResults['successful']++;
                 } catch (\Exception $e) {
