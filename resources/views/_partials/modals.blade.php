@@ -75,3 +75,55 @@
         </div>
     </div>
 </div>
+
+<!-- Deploy Campaign Modal -->
+<div id="deployCampaignModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div class="bg-gradient-to-r from-emerald-600 to-green-500 px-6 py-4 flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-bold text-white"><i class="fas fa-rocket mr-2"></i>Deploy Campaign</h3>
+                <p class="text-emerald-100 text-sm" id="deployCampaignName"></p>
+            </div>
+            <button onclick="document.getElementById('deployCampaignModal').classList.add('hidden')" class="text-white/80 hover:text-white transition-colors"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6">
+            <input type="hidden" id="deploy_campaign_id">
+
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <label class="block text-sm font-medium text-gray-700"><i class="fas fa-mobile-alt mr-2 text-emerald-500"></i>Select Devices</label>
+                    <div class="flex space-x-2">
+                        <button type="button" id="deploySelectAll" class="text-xs px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 smooth-transition font-medium">Select All</button>
+                        <button type="button" id="deployClearAll" class="text-xs px-3 py-1 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 smooth-transition font-medium">Clear</button>
+                    </div>
+                </div>
+                <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1" id="deployDeviceList">
+                    @foreach($devices as $device)
+                    @php
+                        $dsc = ['online'=>['c'=>'text-green-600','b'=>'bg-green-100','i'=>'fa-wifi'],'streaming'=>['c'=>'text-blue-600','b'=>'bg-blue-100','i'=>'fa-music'],'offline'=>['c'=>'text-gray-400','b'=>'bg-gray-100','i'=>'fa-power-off']];
+                        $dcfg = $dsc[$device->status] ?? $dsc['offline'];
+                    @endphp
+                    <label class="flex items-center p-3 border-2 border-gray-200 rounded-xl cursor-pointer smooth-transition hover:border-emerald-300 {{ $device->status === 'offline' ? 'opacity-50' : '' }}">
+                        <input type="checkbox" class="deploy-device-cb h-4 w-4 text-emerald-600 rounded border-gray-300 mr-3" value="{{ $device->id }}" {{ $device->status === 'offline' ? 'disabled' : '' }}>
+                        <div class="h-7 w-7 rounded-full {{ $dcfg['b'] }} flex items-center justify-center mr-3 flex-shrink-0">
+                            <i class="fas {{ $dcfg['i'] }} {{ $dcfg['c'] }} text-xs"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="font-medium text-sm text-gray-900 truncate">{{ $device->name ?? 'Unnamed' }}</p>
+                            <p class="text-xs text-gray-400">{{ ucfirst($device->status) }}</p>
+                        </div>
+                    </label>
+                    @endforeach
+                </div>
+                <p class="text-xs text-gray-400 mt-2"><span id="deploySelectedCount">0</span> device(s) selected</p>
+            </div>
+
+            <div class="flex space-x-3">
+                <button onclick="document.getElementById('deployCampaignModal').classList.add('hidden')" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-colors">Cancel</button>
+                <button id="confirmDeployCampaign" class="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-700 hover:to-green-600 text-white rounded-xl font-semibold shadow-lg transition-all flex items-center justify-center">
+                    <i class="fas fa-rocket mr-2"></i>Deploy Now
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

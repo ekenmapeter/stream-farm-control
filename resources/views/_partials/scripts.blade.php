@@ -294,49 +294,59 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // ── Campaign: Deploy ─────────────────────────────────────────────────
+    // ── Campaign: Deploy (open modal) ──────────────────────────────────────
     document.querySelectorAll('.deploy-campaign').forEach(btn => {
         btn.addEventListener('click', function() {
-            const campaignId = this.dataset.campaignId;
-            const campaignName = this.dataset.campaignName;
+            document.getElementById('deploy_campaign_id').value = this.dataset.campaignId;
+            document.getElementById('deployCampaignName').textContent = this.dataset.campaignName;
+            // Uncheck all devices
+            document.querySelectorAll('.deploy-device-cb').forEach(cb => cb.checked = false);
+            updateDeployCount();
+            document.getElementById('deployCampaignModal').classList.remove('hidden');
+        });
+    });
 
-            // Get all online/streaming device IDs
-            const allDeviceIds = [];
-            document.querySelectorAll('.device-checkbox:not(:disabled)').forEach(cb => {
-                allDeviceIds.push(parseInt(cb.value));
-            });
+    // Deploy modal: select all / clear
+    document.getElementById('deploySelectAll')?.addEventListener('click', () => {
+        document.querySelectorAll('.deploy-device-cb:not(:disabled)').forEach(cb => cb.checked = true);
+        updateDeployCount();
+    });
+    document.getElementById('deployClearAll')?.addEventListener('click', () => {
+        document.querySelectorAll('.deploy-device-cb').forEach(cb => cb.checked = false);
+        updateDeployCount();
+    });
+    document.querySelectorAll('.deploy-device-cb').forEach(cb => cb.addEventListener('change', updateDeployCount));
 
-            if (allDeviceIds.length === 0) { showNotification('No online devices to deploy to', 'error'); return; }
+    function updateDeployCount() {
+        const count = document.querySelectorAll('.deploy-device-cb:checked').length;
+        document.getElementById('deploySelectedCount').textContent = count;
+    }
 
-            const selectedIds = prompt(
-                `Deploy "${campaignName}" to devices.\n\nAvailable device IDs: ${allDeviceIds.join(', ')}\n\nEnter device IDs (comma-separated) or "all" for all online devices:`,
-                'all'
-            );
-            if (!selectedIds) return;
+    // Deploy modal: confirm
+    document.getElementById('confirmDeployCampaign')?.addEventListener('click', function() {
+        const campaignId = document.getElementById('deploy_campaign_id').value;
+        const deviceIds = [];
+        document.querySelectorAll('.deploy-device-cb:checked').forEach(cb => deviceIds.push(parseInt(cb.value)));
 
-            const deviceIds = selectedIds.trim().toLowerCase() === 'all'
-                ? allDeviceIds
-                : selectedIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        if (deviceIds.length === 0) { showNotification('Select at least one device', 'error'); return; }
 
-            if (deviceIds.length === 0) { showNotification('No valid device IDs entered', 'error'); return; }
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Deploying...';
 
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Deploying...';
-
-            fetch(`/api/campaigns/${campaignId}/deploy`, {
-                method: 'POST', headers: headers,
-                body: JSON.stringify({ device_ids: deviceIds })
-            })
-            .then(r => r.json())
-            .then(data => {
-                showNotification(data.message || 'Deployed!', data.success ? 'success' : 'error');
-                if (data.success) setTimeout(() => location.reload(), 1000);
-                else { this.disabled = false; this.innerHTML = '<i class="fas fa-rocket mr-1"></i>Deploy'; }
-            })
-            .catch(err => {
-                showNotification('Error: ' + err, 'error');
-                this.disabled = false; this.innerHTML = '<i class="fas fa-rocket mr-1"></i>Deploy';
-            });
+        fetch(`/api/campaigns/${campaignId}/deploy`, {
+            method: 'POST', headers: headers,
+            body: JSON.stringify({ device_ids: deviceIds })
+        })
+        .then(r => r.json())
+        .then(data => {
+            showNotification(data.message || 'Deployed!', data.success ? 'success' : 'error');
+            document.getElementById('deployCampaignModal').classList.add('hidden');
+            this.disabled = false; this.innerHTML = '<i class="fas fa-rocket mr-2"></i>Deploy Now';
+            if (data.success) setTimeout(() => location.reload(), 1000);
+        })
+        .catch(err => {
+            showNotification('Error: ' + err, 'error');
+            this.disabled = false; this.innerHTML = '<i class="fas fa-rocket mr-2"></i>Deploy Now';
         });
     });
 
