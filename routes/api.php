@@ -3,6 +3,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\CommandController;
 use App\Http\Controllers\Api\DeviceLogController;
+use App\Http\Controllers\Api\AssignmentController;
 
 Route::prefix('devices')->group(function () {
     Route::post('/register', [DeviceController::class, 'register']);
@@ -20,4 +21,13 @@ Route::prefix('commands')->group(function () {
     Route::post('/send-to-all', [CommandController::class, 'sendToAll']);
     Route::post('/send-to-device/{device}', [CommandController::class, 'sendToDevice']);
     Route::post('/send-to-group', [CommandController::class, 'sendToGroup']);
+});
+
+// ── Assignment routes ────────────────────────────────────────────────────
+Route::prefix('assignments')->group(function () {
+    Route::get('/', [AssignmentController::class, 'index']);
+    Route::post('/', [AssignmentController::class, 'store']);
+    Route::put('/{assignment}/status', [AssignmentController::class, 'updateStatus']);
+    Route::post('/{assignment}/control', [AssignmentController::class, 'control']);
+    Route::delete('/{assignment}', [AssignmentController::class, 'destroy']);
 });

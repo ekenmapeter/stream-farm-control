@@ -3,15 +3,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Device;
 use App\Models\DeviceLog;
+use App\Models\DeviceAssignment;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\CommandController;
+use App\Http\Controllers\Api\AssignmentController;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        // Get all devices
-        $devices = Device::orderBy('status', 'desc')
+        // Get all devices with their current assignment
+        $devices = Device::with('currentAssignment')
+                         ->orderBy('status', 'desc')
                          ->orderBy('last_seen', 'desc')
                          ->get();
 
@@ -33,15 +36,27 @@ class DashboardController extends Controller
             ->where('created_at', '>=', now()->subHours(24))
             ->count();
 
+        // Active assignments
+        $activeAssignments = DeviceAssignment::with('device')
+            ->active()
+            ->orderBy('assigned_at', 'desc')
+            ->get();
+
+        // Assignment stats
+        $totalAssignments = DeviceAssignment::count();
+        $activeAssignmentCount = $activeAssignments->count();
+
         // Pass data to the view
         return view('dashboard', [
-            'devices'        => $devices,
-            'onlineCount'    => $onlineCount,
-            'streamingCount' => $streamingCount,
-            'offlineCount'   => $offlineCount,
-            'totalCount'     => $totalCount,
-            'recentLogs'     => $recentLogs,
-            'errorCount'     => $errorCount,
+            'devices'               => $devices,
+            'onlineCount'           => $onlineCount,
+            'streamingCount'        => $streamingCount,
+            'offlineCount'          => $offlineCount,
+            'totalCount'            => $totalCount,
+            'recentLogs'            => $recentLogs,
+            'errorCount'            => $errorCount,
+            'activeAssignments'     => $activeAssignments,
+            'activeAssignmentCount' => $activeAssignmentCount,
         ]);
     }
 
@@ -64,6 +79,29 @@ class DashboardController extends Controller
             return back()->with('success', 'Command broadcasted to all devices!');
         } else {
             return back()->with('error', 'Failed to send command: ' . (json_decode($response->getContent())->message ?? 'Unknown error'));
+        }
+    }
+
+    public function assignTask(Request $request)
+    {
+        $request->validate([
+            'device_ids'   => 'required|array|min:1',
+            'device_ids.*' => 'exists:devices,id',
+            'platform'     => 'required|in:spotify,youtube',
+            'media_url'    => 'required|string',
+            'media_title'  => 'nullable|string|max:255',
+        ]);
+
+        $assignmentController = app()->make(AssignmentController::class);
+        $response = $assignmentController->store($request);
+
+        $result = json_decode($response->getContent());
+
+        if ($response->getStatusCode() === 200 && $result->success) {
+            $count = count($request->device_ids);
+            return back()->with('success', "Task assigned to {$count} device(s) successfully!");
+        } else {
+            return back()->with('error', 'Failed to assign task: ' . ($result->message ?? 'Unknown error'));
         }
     }
 }

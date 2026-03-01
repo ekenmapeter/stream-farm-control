@@ -22,4 +22,41 @@ class Device extends Model
         'metadata' => 'array',
         'last_seen' => 'datetime'
     ];
+
+    // ── Relationships ────────────────────────────────────────────────────
+
+    /**
+     * All assignments for this device.
+     */
+    public function assignments()
+    {
+        return $this->hasMany(DeviceAssignment::class);
+    }
+
+    /**
+     * Active assignments (pending, playing, paused).
+     */
+    public function activeAssignments()
+    {
+        return $this->hasMany(DeviceAssignment::class)
+                    ->whereIn('status', ['pending', 'playing', 'paused']);
+    }
+
+    /**
+     * The most recent active assignment.
+     */
+    public function currentAssignment()
+    {
+        return $this->hasOne(DeviceAssignment::class)
+                    ->whereIn('status', ['pending', 'playing', 'paused'])
+                    ->latest('assigned_at');
+    }
+
+    /**
+     * Device logs.
+     */
+    public function logs()
+    {
+        return $this->hasMany(DeviceLog::class, 'device_id', 'device_id');
+    }
 }

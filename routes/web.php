@@ -13,9 +13,13 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Command sending route
+    // Command sending route (broadcast to all)
     Route::post('/send-command', [DashboardController::class, 'sendCommand'])
         ->name('send.command');
+
+    // Task assignment route (assign to specific devices)
+    Route::post('/assign-task', [DashboardController::class, 'assignTask'])
+        ->name('assign.task');
 });
 
 // Your API routes remain separate
