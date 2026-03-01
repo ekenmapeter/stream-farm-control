@@ -214,6 +214,143 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // ── Campaign: Platform Toggle ────────────────────────────────────────
+    document.querySelectorAll('.campaign-platform-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.campaign-platform-btn').forEach(b => {
+                b.classList.remove('border-emerald-500','bg-emerald-50');
+                b.classList.add('border-gray-200');
+            });
+            this.classList.add('border-emerald-500','bg-emerald-50');
+            this.classList.remove('border-gray-200');
+            this.querySelector('input').checked = true;
+        });
+    });
+
+    // ── Campaign: Add Track Row ──────────────────────────────────────────
+    let trackCount = 1;
+    document.getElementById('addTrackBtn')?.addEventListener('click', function() {
+        trackCount++;
+        const container = document.getElementById('campaignTracksContainer');
+        const row = document.createElement('div');
+        row.className = 'campaign-track-row flex items-center space-x-2';
+        row.innerHTML = `
+            <span class="text-xs text-gray-400 font-bold w-5 flex-shrink-0">${trackCount}</span>
+            <input type="text" placeholder="spotify:track:xxx or YouTube URL" class="campaign-track-url flex-1 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500">
+            <input type="text" placeholder="Title" class="campaign-track-title w-28 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500">
+            <input type="number" placeholder="180" value="180" min="30" max="7200" class="campaign-track-duration w-16 p-2.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-emerald-500" title="Duration in seconds">
+            <button type="button" class="remove-track-btn text-red-400 hover:text-red-600 flex-shrink-0"><i class="fas fa-times"></i></button>
+        `;
+        container.appendChild(row);
+        row.querySelector('.remove-track-btn').addEventListener('click', () => { row.remove(); renumberTracks(); });
+    });
+
+    function renumberTracks() {
+        document.querySelectorAll('.campaign-track-row').forEach((row, i) => {
+            row.querySelector('span').textContent = i + 1;
+        });
+        trackCount = document.querySelectorAll('.campaign-track-row').length;
+    }
+
+    // ── Campaign: Create ─────────────────────────────────────────────────
+    document.getElementById('createCampaignBtn')?.addEventListener('click', function() {
+        const name = document.getElementById('campaign_name').value.trim();
+        const platform = document.querySelector('input[name="campaign_platform"]:checked')?.value || 'spotify';
+
+        if (!name) { showNotification('Please enter a campaign name', 'error'); return; }
+
+        const tracks = [];
+        document.querySelectorAll('.campaign-track-row').forEach(row => {
+            const url = row.querySelector('.campaign-track-url').value.trim();
+            const title = row.querySelector('.campaign-track-title').value.trim();
+            const duration = parseInt(row.querySelector('.campaign-track-duration').value) || 180;
+            if (url) {
+                tracks.push({ media_url: url, media_title: title || null, duration_seconds: duration });
+            }
+        });
+
+        if (tracks.length === 0) { showNotification('Add at least one track', 'error'); return; }
+
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+
+        fetch('/api/campaigns', {
+            method: 'POST', headers: headers,
+            body: JSON.stringify({ name, platform, tracks })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message || 'Campaign created!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showNotification('Failed: ' + (data.message || 'Error'), 'error');
+                this.disabled = false; this.innerHTML = '<i class="fas fa-rocket mr-3"></i> Create Campaign';
+            }
+        })
+        .catch(err => {
+            showNotification('Error: ' + err, 'error');
+            this.disabled = false; this.innerHTML = '<i class="fas fa-rocket mr-3"></i> Create Campaign';
+        });
+    });
+
+    // ── Campaign: Deploy ─────────────────────────────────────────────────
+    document.querySelectorAll('.deploy-campaign').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const campaignId = this.dataset.campaignId;
+            const campaignName = this.dataset.campaignName;
+
+            // Get all online/streaming device IDs
+            const allDeviceIds = [];
+            document.querySelectorAll('.device-checkbox:not(:disabled)').forEach(cb => {
+                allDeviceIds.push(parseInt(cb.value));
+            });
+
+            if (allDeviceIds.length === 0) { showNotification('No online devices to deploy to', 'error'); return; }
+
+            const selectedIds = prompt(
+                `Deploy "${campaignName}" to devices.\n\nAvailable device IDs: ${allDeviceIds.join(', ')}\n\nEnter device IDs (comma-separated) or "all" for all online devices:`,
+                'all'
+            );
+            if (!selectedIds) return;
+
+            const deviceIds = selectedIds.trim().toLowerCase() === 'all'
+                ? allDeviceIds
+                : selectedIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+
+            if (deviceIds.length === 0) { showNotification('No valid device IDs entered', 'error'); return; }
+
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Deploying...';
+
+            fetch(`/api/campaigns/${campaignId}/deploy`, {
+                method: 'POST', headers: headers,
+                body: JSON.stringify({ device_ids: deviceIds })
+            })
+            .then(r => r.json())
+            .then(data => {
+                showNotification(data.message || 'Deployed!', data.success ? 'success' : 'error');
+                if (data.success) setTimeout(() => location.reload(), 1000);
+                else { this.disabled = false; this.innerHTML = '<i class="fas fa-rocket mr-1"></i>Deploy'; }
+            })
+            .catch(err => {
+                showNotification('Error: ' + err, 'error');
+                this.disabled = false; this.innerHTML = '<i class="fas fa-rocket mr-1"></i>Deploy';
+            });
+        });
+    });
+
+    // ── Campaign: Delete ─────────────────────────────────────────────────
+    document.querySelectorAll('.delete-campaign').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Delete this campaign? Active deployments will be stopped.')) return;
+            fetch(`/api/campaigns/${this.dataset.campaignId}`, { method: 'DELETE', headers: headers })
+            .then(r => r.json())
+            .then(data => { showNotification(data.message || 'Deleted', 'success'); setTimeout(() => location.reload(), 800); })
+            .catch(err => showNotification('Error: ' + err, 'error'));
+        });
+    });
+
     // ── Log Level Filter ─────────────────────────────────────────────────
     document.querySelectorAll('.log-filter').forEach(btn => {
         btn.addEventListener('click', function() {

@@ -32,3 +32,14 @@ Route::prefix('assignments')->group(function () {
     Route::post('/{assignment}/control', [AssignmentController::class, 'control']);
     Route::delete('/{assignment}', [AssignmentController::class, 'destroy']);
 });
+
+// ── Campaign routes ─────────────────────────────────────────────────────
+use App\Http\Controllers\CampaignController;
+
+Route::prefix('campaigns')->group(function () {
+    Route::get('/', [CampaignController::class, 'index']);
+    Route::post('/', [CampaignController::class, 'store']);
+    Route::put('/{campaign}', [CampaignController::class, 'update']);
+    Route::delete('/{campaign}', [CampaignController::class, 'destroy']);
+    Route::post('/{campaign}/deploy', [CampaignController::class, 'deploy']);
+});

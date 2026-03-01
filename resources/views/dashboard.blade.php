@@ -135,9 +135,12 @@
         </div>
 
         <!-- Tab Navigation -->
-        <div class="flex space-x-1 mb-6 bg-white rounded-xl p-1 shadow-sm border border-gray-200 max-w-2xl">
+        <div class="flex space-x-1 mb-6 bg-white rounded-xl p-1 shadow-sm border border-gray-200 max-w-3xl">
             <button class="tab-btn active flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold border-2 border-transparent smooth-transition" data-tab="assign">
                 <i class="fas fa-tasks mr-2"></i>Assign Tasks
+            </button>
+            <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold border-2 border-transparent smooth-transition text-gray-500 hover:text-gray-700" data-tab="campaigns">
+                <i class="fas fa-list-music mr-2"></i>Campaigns
             </button>
             <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold border-2 border-transparent smooth-transition text-gray-500 hover:text-gray-700" data-tab="broadcast">
                 <i class="fas fa-broadcast-tower mr-2"></i>Broadcast All
@@ -350,6 +353,121 @@
                             <div class="text-center py-8">
                                 <div class="h-14 w-14 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3"><i class="fas fa-mobile-alt text-gray-400 text-xl"></i></div>
                                 <p class="text-sm text-gray-500">No devices connected</p>
+                            </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- TAB: Campaigns -->
+        <div id="tab-campaigns" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Create Campaign Form -->
+                <div class="lg:col-span-1">
+                    <div class="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+                        <div class="bg-gradient-to-r from-emerald-600 to-green-500 px-6 py-4">
+                            <h2 class="text-lg font-bold text-white flex items-center"><i class="fas fa-plus-circle mr-3"></i> New Campaign</h2>
+                            <p class="text-emerald-100 text-sm">Create a looping playlist for devices</p>
+                        </div>
+                        <div class="p-6">
+                            <!-- Campaign Name -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-tag mr-2 text-emerald-500"></i>Campaign Name</label>
+                                <input type="text" id="campaign_name" placeholder="e.g. Morning HipHop Loop" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 smooth-transition">
+                            </div>
+
+                            <!-- Platform -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-headphones mr-2 text-emerald-500"></i>Platform</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <label class="campaign-platform-btn flex items-center p-3 border-2 rounded-xl cursor-pointer smooth-transition border-emerald-500 bg-emerald-50" data-platform="spotify">
+                                        <input type="radio" name="campaign_platform" value="spotify" class="hidden" checked>
+                                        <i class="fab fa-spotify text-green-500 text-xl mr-2"></i><span class="font-medium">Spotify</span>
+                                    </label>
+                                    <label class="campaign-platform-btn flex items-center p-3 border-2 rounded-xl cursor-pointer smooth-transition border-gray-200" data-platform="youtube">
+                                        <input type="radio" name="campaign_platform" value="youtube" class="hidden">
+                                        <i class="fab fa-youtube text-red-500 text-xl mr-2"></i><span class="font-medium">YouTube</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Tracks -->
+                            <div class="mb-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="block text-sm font-medium text-gray-700"><i class="fas fa-music mr-2 text-emerald-500"></i>Tracks</label>
+                                    <button type="button" id="addTrackBtn" class="text-xs px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 smooth-transition font-medium"><i class="fas fa-plus mr-1"></i>Add Track</button>
+                                </div>
+                                <div id="campaignTracksContainer" class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                    <div class="campaign-track-row flex items-center space-x-2">
+                                        <span class="text-xs text-gray-400 font-bold w-5 flex-shrink-0">1</span>
+                                        <input type="text" placeholder="spotify:track:xxx or YouTube URL" class="campaign-track-url flex-1 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500">
+                                        <input type="text" placeholder="Title (optional)" class="campaign-track-title w-28 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500">
+                                        <input type="number" placeholder="180" value="180" min="30" max="7200" class="campaign-track-duration w-16 p-2.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-emerald-500" title="Duration in seconds">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-2">Duration = how many seconds per track before switching to next</p>
+                            </div>
+
+                            <button type="button" id="createCampaignBtn" class="w-full bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-700 hover:to-green-600 text-white font-semibold py-3 px-6 rounded-xl smooth-transition flex items-center justify-center shadow-lg">
+                                <i class="fas fa-rocket mr-3"></i> Create Campaign
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campaign List + Deploy -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+                        <div class="bg-gradient-to-r from-violet-600 to-purple-500 px-6 py-4">
+                            <h2 class="text-lg font-bold text-white flex items-center">
+                                <i class="fas fa-layer-group mr-3"></i> Your Campaigns
+                                <span class="ml-auto bg-white/20 text-white text-sm font-medium px-3 py-1 rounded-full">{{ $campaigns->count() ?? 0 }}</span>
+                            </h2>
+                        </div>
+                        <div class="p-4">
+                            @if(isset($campaigns) && $campaigns->count() > 0)
+                            <div class="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+                                @foreach($campaigns as $campaign)
+                                <div class="p-4 border border-gray-200 rounded-xl smooth-transition hover:shadow-md" data-campaign-id="{{ $campaign->id }}">
+                                    <div class="flex items-start justify-between mb-3">
+                                        <div>
+                                            <div class="flex items-center">
+                                                <i class="fab fa-{{ $campaign->platform }} {{ $campaign->platform === 'spotify' ? 'text-green-500' : 'text-red-500' }} text-lg mr-2"></i>
+                                                <h3 class="font-bold text-gray-900">{{ $campaign->name }}</h3>
+                                            </div>
+                                            <p class="text-xs text-gray-400 mt-1">{{ $campaign->tracks->count() }} tracks &bull; {{ $campaign->assignments_count ?? 0 }} assignments</p>
+                                        </div>
+                                        <div class="flex space-x-2">
+                                            <button class="deploy-campaign px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-green-500 text-white text-xs rounded-lg hover:from-emerald-600 hover:to-green-600 smooth-transition font-medium" data-campaign-id="{{ $campaign->id }}" data-campaign-name="{{ $campaign->name }}">
+                                                <i class="fas fa-rocket mr-1"></i>Deploy
+                                            </button>
+                                            <button class="delete-campaign px-3 py-1.5 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 smooth-transition font-medium" data-campaign-id="{{ $campaign->id }}">
+                                                <i class="fas fa-trash-alt mr-1"></i>Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <!-- Track List -->
+                                    <div class="bg-gray-50 rounded-lg p-3">
+                                        <div class="space-y-1.5">
+                                            @foreach($campaign->tracks as $track)
+                                            <div class="flex items-center text-sm">
+                                                <span class="text-xs font-bold text-gray-400 w-5">{{ $loop->iteration }}</span>
+                                                <i class="fas fa-music text-gray-300 text-xs mr-2"></i>
+                                                <span class="text-gray-700 flex-1 truncate">{{ $track->media_title ?? Str::limit($track->media_url, 40) }}</span>
+                                                <span class="text-xs text-gray-400 ml-2">{{ gmdate('i:s', $track->duration_seconds) }}</span>
+                                            </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </div>
+                                @endforeach
+                            </div>
+                            @else
+                            <div class="text-center py-12">
+                                <div class="h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4"><i class="fas fa-layer-group text-purple-400 text-2xl"></i></div>
+                                <p class="text-sm text-gray-500 font-medium">No campaigns yet</p>
+                                <p class="text-xs text-gray-400 mt-1">Create your first campaign to start auto-looping tracks on your devices</p>
                             </div>
                             @endif
                         </div>

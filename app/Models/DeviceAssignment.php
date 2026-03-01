@@ -8,6 +8,8 @@ class DeviceAssignment extends Model
 {
     protected $fillable = [
         'device_id',
+        'campaign_id',
+        'campaign_track_id',
         'platform',
         'media_url',
         'media_title',
@@ -26,6 +28,16 @@ class DeviceAssignment extends Model
     public function device()
     {
         return $this->belongsTo(Device::class);
+    }
+
+    public function campaign()
+    {
+        return $this->belongsTo(Campaign::class);
+    }
+
+    public function campaignTrack()
+    {
+        return $this->belongsTo(CampaignTrack::class);
     }
 
     // ── Scopes ───────────────────────────────────────────────────────────

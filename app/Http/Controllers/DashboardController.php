@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Models\Device;
 use App\Models\DeviceLog;
 use App\Models\DeviceAssignment;
+use App\Models\Campaign;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\CommandController;
 use App\Http\Controllers\Api\AssignmentController;
@@ -62,6 +63,9 @@ class DashboardController extends Controller
         $totalAssignments = DeviceAssignment::count();
         $activeAssignmentCount = $activeAssignments->count();
 
+        // Campaigns
+        $campaigns = Campaign::with('tracks')->withCount('assignments')->get();
+
         // Pass data to the view
         return view('dashboard', [
             'devices'               => $devices,
@@ -73,6 +77,7 @@ class DashboardController extends Controller
             'errorCount'            => $errorCount,
             'activeAssignments'     => $activeAssignments,
             'activeAssignmentCount' => $activeAssignmentCount,
+            'campaigns'             => $campaigns,
         ]);
     }
 
