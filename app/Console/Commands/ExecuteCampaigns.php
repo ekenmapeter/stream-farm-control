@@ -14,16 +14,10 @@ class ExecuteCampaigns extends Command
     protected $signature = 'campaigns:execute';
     protected $description = 'Advance campaign tracks on devices. Run every minute via cron.';
 
-    protected Messaging $messaging;
-
-    public function __construct(Messaging $messaging)
-    {
-        parent::__construct();
-        $this->messaging = $messaging;
-    }
-
     public function handle()
     {
+        // Resolve Firebase Messaging at runtime (not constructor) to avoid boot issues
+        $messaging = app(Messaging::class);
         // Find all active campaign assignments that have been playing long enough
         $activeAssignments = DeviceAssignment::with(['device', 'campaign.tracks', 'campaignTrack'])
             ->whereNotNull('campaign_id')
@@ -91,7 +85,7 @@ class ExecuteCampaigns extends Command
                         'payload' => ['aps' => ['content-available' => 1]]
                     ]);
 
-                $this->messaging->send($message);
+                $messaging->send($message);
 
                 // Update assignment to point to the new track
                 $assignment->update([
