@@ -9,7 +9,7 @@ use App\Models\DeviceAssignment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Kreait\Firebase\Messaging\CloudMessage;
-use Kreait\Firebase\Contract\Messaging;
+use Kreait\Firebase\Factory;
 
 class CampaignController extends Controller
 {
@@ -199,7 +199,8 @@ class CampaignController extends Controller
                         'payload' => ['aps' => ['content-available' => 1]]
                     ]);
 
-                $messaging = app(Messaging::class);
+                $messaging = $this->getMessaging();
+                if (!$messaging) throw new \Exception("Firebase Messaging initialization failed.");
                 $messaging->send($message);
 
                 $assignment->update(['status' => 'playing', 'started_at' => now()]);
@@ -222,5 +223,29 @@ class CampaignController extends Controller
             'assignments' => $assignments,
             'stats'       => $sendResults,
         ]);
+    }
+
+    private function getMessaging()
+    {
+        $credentialsPath = base_path(config('firebase.credentials'));
+
+        if (!file_exists($credentialsPath)) {
+            $storagePath = storage_path('app');
+            $files = glob($storagePath . '/*.json');
+            foreach ($files as $file) {
+                if (str_contains($file, 'firebase-adminsdk')) {
+                    $credentialsPath = $file;
+                    break;
+                }
+            }
+        }
+
+        if (!file_exists($credentialsPath)) return null;
+
+        try {
+            return (new Factory)->withServiceAccount($credentialsPath)->createMessaging();
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

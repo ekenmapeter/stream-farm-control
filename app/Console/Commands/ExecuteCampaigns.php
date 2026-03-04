@@ -8,7 +8,7 @@ use App\Models\CampaignTrack;
 use App\Models\DeviceLog;
 use Illuminate\Support\Str;
 use Kreait\Firebase\Messaging\CloudMessage;
-use Kreait\Firebase\Contract\Messaging;
+use Kreait\Firebase\Factory;
 
 class ExecuteCampaigns extends Command
 {
@@ -17,8 +17,14 @@ class ExecuteCampaigns extends Command
 
     public function handle()
     {
-        // Resolve Firebase Messaging at runtime (not constructor) to avoid boot issues
-        $messaging = app(Messaging::class);
+        // Adopt the pattern used in CommandController to resolve Firebase since container binding isn't available
+        $messaging = $this->getMessaging();
+        
+        if (!$messaging) {
+            $this->error("Failed to initialize Firebase Messaging. Check credentials.");
+            return 1;
+        }
+
         // Find all active campaign assignments that have been playing long enough
         $activeAssignments = DeviceAssignment::with(['device', 'campaign.tracks', 'campaignTrack'])
             ->whereNotNull('campaign_id')
@@ -126,5 +132,29 @@ class ExecuteCampaigns extends Command
             $this->info("Campaign execution complete. Advanced {$advanced} device(s).");
         }
         return 0;
+    }
+
+    private function getMessaging()
+    {
+        $credentialsPath = base_path(config('firebase.credentials'));
+
+        if (!file_exists($credentialsPath)) {
+            $storagePath = storage_path('app');
+            $files = glob($storagePath . '/*.json');
+            foreach ($files as $file) {
+                if (str_contains($file, 'firebase-adminsdk')) {
+                    $credentialsPath = $file;
+                    break;
+                }
+            }
+        }
+
+        if (!file_exists($credentialsPath)) return null;
+
+        try {
+            return (new Factory)->withServiceAccount($credentialsPath)->createMessaging();
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }
