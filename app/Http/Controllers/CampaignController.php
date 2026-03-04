@@ -13,11 +13,8 @@ use Kreait\Firebase\Contract\Messaging;
 
 class CampaignController extends Controller
 {
-    protected Messaging $messaging;
-
-    public function __construct(Messaging $messaging)
+    public function __construct()
     {
-        $this->messaging = $messaging;
     }
 
     /**
@@ -202,7 +199,8 @@ class CampaignController extends Controller
                         'payload' => ['aps' => ['content-available' => 1]]
                     ]);
 
-                $this->messaging->send($message);
+                $messaging = app(Messaging::class);
+                $messaging->send($message);
 
                 $assignment->update(['status' => 'playing', 'started_at' => now()]);
                 $device->update(['status' => 'streaming', 'last_seen' => now()]);
