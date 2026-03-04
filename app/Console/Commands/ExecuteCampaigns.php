@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\DeviceAssignment;
 use App\Models\CampaignTrack;
+use App\Models\DeviceLog;
 use Illuminate\Support\Str;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Contract\Messaging;
@@ -99,12 +100,31 @@ class ExecuteCampaigns extends Command
                 $advanced++;
 
                 $this->info("Device {$device->name}: Advanced to track " . ($nextIndex + 1) . " - {$nextTrack->media_url}");
+                
+                // Log to Dashboard
+                DeviceLog::create([
+                    'device_id' => $device->id,
+                    'level'     => 'info',
+                    'message'   => "Campaign Advance: Switched to Track " . ($nextIndex + 1) . " - " . ($nextTrack->media_title ?? 'Unnamed'),
+                    'metadata'  => ['campaign_id'=>$campaign->id, 'track_url'=>$nextTrack->media_url]
+                ]);
+
             } catch (\Exception $e) {
                 $this->error("Device {$device->name}: Failed to advance - {$e->getMessage()}");
+                
+                // Log Error to Dashboard
+                DeviceLog::create([
+                    'device_id' => $device->id,
+                    'level'     => 'error',
+                    'message'   => "Campaign Error: Failed to advance to next track: " . $e->getMessage(),
+                    'metadata'  => ['campaign_id'=>$campaign->id]
+                ]);
             }
         }
 
-        $this->info("Campaign execution complete. Advanced {$advanced} device(s).");
+        if ($advanced > 0) {
+            $this->info("Campaign execution complete. Advanced {$advanced} device(s).");
+        }
         return 0;
     }
 }
