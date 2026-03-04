@@ -43,3 +43,7 @@ Route::prefix('campaigns')->group(function () {
     Route::delete('/{campaign}', [CampaignController::class, 'destroy']);
     Route::post('/{campaign}/deploy', [CampaignController::class, 'deploy']);
 });
+
+// ── Dashboard routes ─────────────────────────────────────────────────────
+use App\Http\Controllers\DashboardController;
+Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
