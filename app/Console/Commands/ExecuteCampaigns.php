@@ -33,62 +33,66 @@ class ExecuteCampaigns extends Command
             ->whereNotNull('started_at')
             ->get();
 
+        // Log count for debugging
+        \Illuminate\Support\Facades\Log::info("ExecuteCampaigns: Found " . $activeAssignments->count() . " assignments in 'playing' status.");
+
         $advanced = 0;
 
         foreach ($activeAssignments as $assignment) {
-            $track = $assignment->campaignTrack;
-            $campaign = $assignment->campaign;
-            $device = $assignment->device;
-
-            if (!$campaign || !$device || !$device->fcm_token) {
-                continue;
-            }
-
-            // Get all tracks for this campaign
-            $tracks = $campaign->tracks()->orderBy('position_order')->get();
-            if ($tracks->isEmpty()) {
-                $this->warn("Device {$device->name}: Campaign {$campaign->id} has no tracks.");
-                continue;
-            }
-
-            // Stable Shuffle: reproduces the exact sequence decided at deployment
-            $seed = "{$assignment->device_id}_{$assignment->campaign_id}_{$assignment->assigned_at->timestamp}";
-            $shuffledTracks = $tracks->sortBy(fn($t) => md5($seed . $t->id))->values();
-
-            // Determine current track index in HIS shuffled list
-            $currentIndex = $shuffledTracks->search(function ($t) use ($assignment) {
-                return ($assignment->campaign_track_id && $t->id === $assignment->campaign_track_id) || $t->media_url === $assignment->media_url;
-            });
-
-            // Fallback: start fresh if current track not found
-            if ($currentIndex === false) {
-                $this->warn("Device {$device->name}: Current track position lost. Resetting sequence.");
-                $currentIndex = $shuffledTracks->count() - 1;
-            }
-
-            // Check timing
-            $playedSeconds = now()->diffInSeconds($assignment->started_at ?? now()->subDays(1));
-            // Get duration of the track we JUST finished (if available)
-            $trackInList = $shuffledTracks->get($currentIndex);
-            $duration = $trackInList ? ($trackInList->duration_seconds ?? 180) : 180;
-
-            // Buffer
-            $buffer = rand(2, 8);
-
-            if ($playedSeconds < ($duration + $buffer)) {
-                // Not time yet
-                continue; 
-            }
-
-            // Advance to next index in the shuffled list
-            $nextIndex = ($currentIndex < $shuffledTracks->count() - 1)
-                ? $currentIndex + 1
-                : 0;
-
-            $nextTrack = $shuffledTracks[$nextIndex];
-
-            // Send FCM command for the next track
             try {
+                $track = $assignment->campaignTrack;
+                $campaign = $assignment->campaign;
+                $device = $assignment->device;
+
+                if (!$campaign || !$device || !$device->fcm_token) {
+                    continue;
+                }
+
+                // Get all tracks for this campaign
+                $tracks = $campaign->tracks()->orderBy('position_order')->get();
+                if ($tracks->isEmpty()) {
+                    $this->warn("Device {$device->name}: Campaign {$campaign->id} has no tracks.");
+                    continue;
+                }
+
+                // Stable Shuffle: reproduces the exact sequence decided at deployment
+                $assignedAt = $assignment->assigned_at ?? $assignment->created_at ?? now();
+                $seed = "{$assignment->device_id}_{$assignment->campaign_id}_{$assignedAt->timestamp}";
+                $shuffledTracks = $tracks->sortBy(fn($t) => md5($seed . $t->id))->values();
+
+                // Determine current track index in HIS shuffled list
+                $currentIndex = $shuffledTracks->search(function ($t) use ($assignment) {
+                    return ($assignment->campaign_track_id && $t->id === $assignment->campaign_track_id) || $t->media_url === $assignment->media_url;
+                });
+
+                // Fallback: start fresh if current track not found
+                if ($currentIndex === false) {
+                    $this->warn("Device {$device->name}: Current track position lost. Resetting sequence.");
+                    $currentIndex = $shuffledTracks->count() - 1;
+                }
+
+                // Check timing
+                $playedSeconds = now()->diffInSeconds($assignment->started_at ?? now()->subDays(1));
+                // Get duration of the track we JUST finished (if available)
+                $trackInList = $shuffledTracks->get($currentIndex);
+                $duration = $trackInList ? ($trackInList->duration_seconds ?? 180) : 180;
+
+                // Buffer
+                $buffer = rand(2, 8);
+
+                if ($playedSeconds < ($duration + $buffer)) {
+                    // Not time yet
+                    continue; 
+                }
+
+                // Advance to next index in the shuffled list
+                $nextIndex = ($currentIndex < $shuffledTracks->count() - 1)
+                    ? $currentIndex + 1
+                    : 0;
+
+                $nextTrack = $shuffledTracks[$nextIndex];
+
+                // Send FCM command for the next track
                 $command = $campaign->platform === 'spotify' ? 'play_spotify' : 'play_youtube';
 
                 $message = CloudMessage::withTarget('token', $device->fcm_token)
@@ -134,14 +138,16 @@ class ExecuteCampaigns extends Command
                 ]);
 
             } catch (\Exception $e) {
-                $this->error("Device {$device->name}: Failed to advance - {$e->getMessage()}");
+                $this->error("Error processing assignment #{$assignment->id}: {$e->getMessage()}");
                 
-                DeviceLog::create([
-                    'device_id' => $device->id,
-                    'level'     => 'error',
-                    'message'   => "Campaign Error: Failed to advance to track " . ($nextIndex+1) . ": " . $e->getMessage(),
-                    'metadata'  => ['campaign_id'=>$campaign->id]
-                ]);
+                if (isset($device)) {
+                    DeviceLog::create([
+                        'device_id' => $device->id,
+                        'level'     => 'error',
+                        'message'   => "Campaign Error: " . $e->getMessage(),
+                        'metadata'  => ['campaign_id' => $campaign->id ?? null]
+                    ]);
+                }
             }
         }
 
