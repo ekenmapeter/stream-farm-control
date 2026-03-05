@@ -127,3 +127,54 @@
         </div>
     </div>
 </div>
+<!-- Edit Campaign Modal -->
+<div id="editCampaignModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+        <div class="bg-gradient-to-r from-amber-600 to-amber-500 px-6 py-4 flex items-center justify-between">
+            <h3 class="text-lg font-bold text-white"><i class="fas fa-edit mr-2"></i>Edit Campaign</h3>
+            <button onclick="document.getElementById('editCampaignModal').classList.add('hidden')" class="text-white/80 hover:text-white transition-colors"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6">
+            <input type="hidden" id="edit_campaign_id">
+            
+            <!-- Campaign Name -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Campaign Name</label>
+                <input type="text" id="edit_campaign_name" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+            </div>
+
+            <!-- Platform -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Platform</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="edit-campaign-platform-btn flex items-center p-3 border-2 rounded-xl cursor-pointer smooth-transition border-gray-200" data-platform="spotify">
+                        <input type="radio" name="edit_campaign_platform" value="spotify" class="hidden">
+                        <i class="fab fa-spotify text-green-500 text-xl mr-2"></i><span class="font-medium">Spotify</span>
+                    </label>
+                    <label class="edit-campaign-platform-btn flex items-center p-3 border-2 rounded-xl cursor-pointer smooth-transition border-gray-200" data-platform="youtube">
+                        <input type="radio" name="edit_campaign_platform" value="youtube" class="hidden">
+                        <i class="fab fa-youtube text-red-500 text-xl mr-2"></i><span class="font-medium">YouTube</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Tracks -->
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block text-sm font-medium text-gray-700">Tracks</label>
+                    <button type="button" id="editAddTrackBtn" class="text-xs px-3 py-1 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 smooth-transition font-medium"><i class="fas fa-plus mr-1"></i>Add Track</button>
+                </div>
+                <div id="editCampaignTracksContainer" class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                    <!-- Tracks will be populated here -->
+                </div>
+            </div>
+
+            <div class="mt-8 flex space-x-3">
+                <button onclick="document.getElementById('editCampaignModal').classList.add('hidden')" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-colors">Cancel</button>
+                <button id="saveCampaignChangesBtn" class="flex-1 px-4 py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white rounded-xl font-semibold shadow-lg transition-all flex items-center justify-center">
+                    <i class="fas fa-save mr-2"></i>Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

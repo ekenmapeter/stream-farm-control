@@ -361,6 +361,113 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // ── Campaign: Edit (Open Modal & Populate) ──────────────────────────
+    document.querySelectorAll('.edit-campaign').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.campaignId;
+            const name = this.dataset.campaignName;
+            const platform = this.dataset.campaignPlatform;
+            const tracks = JSON.parse(this.dataset.tracks || '[]');
+
+            document.getElementById('edit_campaign_id').value = id;
+            document.getElementById('edit_campaign_name').value = name;
+            
+            // Set platform
+            document.querySelectorAll('.edit-campaign-platform-btn').forEach(b => {
+                const isSelected = b.dataset.platform === platform;
+                b.classList.toggle('border-amber-500', isSelected);
+                b.classList.toggle('bg-amber-50', isSelected);
+                b.classList.toggle('border-gray-200', !isSelected);
+                b.querySelector('input').checked = isSelected;
+            });
+
+            // Populate tracks
+            const container = document.getElementById('editCampaignTracksContainer');
+            container.innerHTML = '';
+            tracks.forEach((track, i) => {
+                addEditTrackRow(track.media_url, track.media_title, track.duration_seconds, i + 1);
+            });
+
+            document.getElementById('editCampaignModal').classList.remove('hidden');
+        });
+    });
+
+    // Edit Platform Toggle
+    document.querySelectorAll('.edit-campaign-platform-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.edit-campaign-platform-btn').forEach(b => {
+                b.classList.remove('border-amber-500','bg-amber-50');
+                b.classList.add('border-gray-200');
+            });
+            this.classList.add('border-amber-500','bg-amber-50');
+            this.classList.remove('border-gray-200');
+            this.querySelector('input').checked = true;
+        });
+    });
+
+    function addEditTrackRow(url = '', title = '', duration = 180, index = null) {
+        const container = document.getElementById('editCampaignTracksContainer');
+        const count = index || (container.querySelectorAll('.edit-track-row').length + 1);
+        const row = document.createElement('div');
+        row.className = 'edit-track-row flex items-center space-x-2';
+        row.innerHTML = `
+            <span class="text-xs text-gray-400 font-bold w-5 flex-shrink-0">${count}</span>
+            <input type="text" placeholder="URL/URI" value="${url}" class="edit-track-url flex-1 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500">
+            <input type="text" placeholder="Title" value="${title || ''}" class="edit-track-title w-28 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500">
+            <input type="number" value="${duration}" min="30" max="7200" class="edit-track-duration w-16 p-2.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-amber-500">
+            <button type="button" class="remove-edit-track-btn text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>
+        `;
+        container.appendChild(row);
+        row.querySelector('.remove-edit-track-btn').addEventListener('click', () => { 
+            row.remove(); 
+            // Renumber
+            document.querySelectorAll('.edit-track-row').forEach((r, idx) => r.querySelector('span').textContent = idx + 1);
+        });
+    }
+
+    document.getElementById('editAddTrackBtn')?.addEventListener('click', () => addEditTrackRow());
+
+    // Save Changes
+    document.getElementById('saveCampaignChangesBtn')?.addEventListener('click', function() {
+        const id = document.getElementById('edit_campaign_id').value;
+        const name = document.getElementById('edit_campaign_name').value.trim();
+        const platform = document.querySelector('input[name="edit_campaign_platform"]:checked')?.value;
+
+        if (!name) { showNotification('Name is required', 'error'); return; }
+
+        const tracks = [];
+        document.querySelectorAll('.edit-track-row').forEach(row => {
+            const url = row.querySelector('.edit-track-url').value.trim();
+            const title = row.querySelector('.edit-track-title').value.trim();
+            const duration = parseInt(row.querySelector('.edit-track-duration').value) || 180;
+            if (url) tracks.push({ media_url: url, media_title: title || null, duration_seconds: duration });
+        });
+
+        if (tracks.length === 0) { showNotification('Add at least one track', 'error'); return; }
+
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+
+        fetch(`/api/campaigns/${id}`, {
+            method: 'PUT', headers: headers,
+            body: JSON.stringify({ name, platform, tracks })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Campaign updated!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showNotification('Error: ' + (data.message || 'Unknown'), 'error');
+                this.disabled = false; this.innerHTML = '<i class="fas fa-save mr-2"></i>Save Changes';
+            }
+        })
+        .catch(err => {
+            showNotification('Error: ' + err, 'error');
+            this.disabled = false; this.innerHTML = '<i class="fas fa-save mr-2"></i>Save Changes';
+        });
+    });
+
     // ── Log Level Filter ─────────────────────────────────────────────────
     document.querySelectorAll('.log-filter').forEach(btn => {
         btn.addEventListener('click', function() {

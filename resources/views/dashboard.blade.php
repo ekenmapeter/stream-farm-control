@@ -655,6 +655,14 @@
                                                 </div>
                                                 <div class="flex space-x-2">
                                                     <button
+                                                        class="edit-campaign px-3 py-1.5 bg-amber-50 text-amber-600 text-xs rounded-lg hover:bg-amber-100 smooth-transition font-medium"
+                                                        data-campaign-id="{{ $campaign->id }}"
+                                                        data-campaign-name="{{ $campaign->name }}"
+                                                        data-campaign-platform="{{ $campaign->platform }}"
+                                                        data-tracks="{{ json_encode($campaign->tracks) }}">
+                                                        <i class="fas fa-edit mr-1"></i>Edit
+                                                    </button>
+                                                    <button
                                                         class="deploy-campaign px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-green-500 text-white text-xs rounded-lg hover:from-emerald-600 hover:to-green-600 smooth-transition font-medium"
                                                         data-campaign-id="{{ $campaign->id }}"
                                                         data-campaign-name="{{ $campaign->name }}">
