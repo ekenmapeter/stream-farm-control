@@ -39,22 +39,23 @@ class ExecuteCampaigns extends Command
 
         foreach ($activeAssignments as $assignment) {
             try {
-                // Refresh models from DB to avoid any stale data issues during 5-minute gaps
                 $assignment->refresh(); 
                 $campaign = $assignment->campaign;
                 $device = $assignment->device;
 
                 if (!$campaign || !$device || !$device->fcm_token) {
-                    $this->warn(" -> Assignment #{$assignment->id}: Skipping (Missing Device/Token/Campaign)");
+                    $msg = "Asgn #{$assignment->id}: Skipping (Missing Device/Token/Campaign)";
+                    $this->warn($msg);
+                    \Illuminate\Support\Facades\Log::info($msg);
                     continue;
                 }
-
-                $this->comment(" -> Processing Assignment #{$assignment->id} for Device: {$device->name}");
 
                 // 1. Get/Refresh tracks
                 $tracks = $campaign->tracks()->orderBy('position_order')->get();
                 if ($tracks->isEmpty()) {
-                    $this->warn("    ! No tracks found for campaign {$campaign->id}");
+                    $msg = "Asgn #{$assignment->id}: Campaign has no tracks.";
+                    $this->warn($msg);
+                    \Illuminate\Support\Facades\Log::info($msg);
                     continue;
                 }
 
@@ -71,11 +72,13 @@ class ExecuteCampaigns extends Command
                 });
 
                 if ($currentIndex === false) {
-                    $this->warn("    ! Current track position lost. Refreshing from start.");
-                    $currentIndex = $trackCount - 1; // Loops back to 0
+                    $msg = "Asgn #{$assignment->id}: Track position lost. Resetting to start.";
+                    $this->warn($msg);
+                    \Illuminate\Support\Facades\Log::info($msg);
+                    $currentIndex = $trackCount - 1; 
                 }
 
-                // 4. Timing Check (Force UTC for comparison to avoid timezone mismatches)
+                // 4. Timing Check
                 $startedAt = ($assignment->started_at ?? $assignment->created_at ?? now())->timezone('UTC');
                 $currentTime = now()->timezone('UTC');
                 $playedSeconds = $currentTime->diffInSeconds($startedAt);
@@ -85,11 +88,12 @@ class ExecuteCampaigns extends Command
                 $buffer = rand(2, 6);
                 $threshold = $duration + $buffer;
 
-                $this->line("    * Timezone: " . config('app.timezone') . " | Server UTC: " . $currentTime->toDateTimeString());
-                $this->line("    * Started At (UTC): " . $startedAt->toDateTimeString() . " | Played: {$playedSeconds}s | Target: {$threshold}s");
+                $msg = "Asgn #{$assignment->id}: Track '{$assignment->media_url}' | Played: {$playedSeconds}s | Goal: {$threshold}s | Start(UTC): " . $startedAt->toDateTimeString();
+                $this->line($msg);
+                \Illuminate\Support\Facades\Log::info($msg);
 
                 if (!$force && $playedSeconds < $threshold) {
-                    $this->line("      - Wait: Still need " . ($threshold - $playedSeconds) . "s more. (Next check in 5-min cron)");
+                    $this->line("      - Not time yet.");
                     continue;
                 }
 
@@ -97,7 +101,9 @@ class ExecuteCampaigns extends Command
                 $nextIndex = ($currentIndex < $trackCount - 1) ? $currentIndex + 1 : 0;
                 $nextTrack = $shuffledTracks[$nextIndex];
 
-                $this->info("    >>> ADVANCING to Track #" . ($nextIndex + 1) . ": {$nextTrack->media_url}");
+                $msg = "Asgn #{$assignment->id}: >>> ADVANCING to Track #" . ($nextIndex + 1) . ": {$nextTrack->media_url}";
+                $this->info($msg);
+                \Illuminate\Support\Facades\Log::info($msg);
 
                 // 6. Send Command
                 $command = $campaign->platform === 'spotify' ? 'play_spotify' : 'play_youtube';
@@ -119,7 +125,6 @@ class ExecuteCampaigns extends Command
                 $messaging->send($message);
 
                 // 7. Update Database
-                // Using update on the assignment model specifically to avoid 'stdClass' warns
                 $assignment->update([
                     'campaign_track_id' => (int)$nextTrack->id,
                     'media_url'         => (string)$nextTrack->media_url,
@@ -130,11 +135,12 @@ class ExecuteCampaigns extends Command
                 $device->update(['last_seen' => now()]);
                 $advanced++;
                 
-                $this->info("    + Database Updated.");
+                \Illuminate\Support\Facades\Log::info("Asgn #{$assignment->id}: Database Updated.");
 
             } catch (\Exception $e) {
-                $this->error("    ! ERROR: " . $e->getMessage());
-                \Illuminate\Support\Facades\Log::error("ExecuteCampaigns Error (Asgn #{$assignment->id}): " . $e->getMessage());
+                $msg = "Asgn #{$assignment->id} ERROR: " . $e->getMessage();
+                $this->error($msg);
+                \Illuminate\Support\Facades\Log::error($msg);
             }
         }
 
