@@ -107,20 +107,24 @@ class ExecuteCampaigns extends Command
 
                 // 6. Send Command
                 $command = $campaign->platform === 'spotify' ? 'play_spotify' : 'play_youtube';
+
                 $message = CloudMessage::withTarget('token', $device->fcm_token)
                     ->withData([
                         'command'       => $command,
                         'track_id'      => (string)$nextTrack->media_url,
                         'youtube_url'   => (string)$nextTrack->media_url,
                         'media_url'     => (string)$nextTrack->media_url,
-                        'track_title'   => (string)($nextTrack->media_title ?? ''),
                         'action'        => 'play',
                         'platform'      => (string)$campaign->platform,
                         'assignment_id' => (string)$assignment->id,
                         'timestamp'     => (string)now()->timestamp,
                         'command_id'    => Str::uuid()->toString(),
                     ])
-                    ->withAndroidConfig(['priority' => 'high', 'ttl' => '3600s']);
+                    ->withAndroidConfig(['priority' => 'high', 'ttl' => '3600s'])
+                    ->withApnsConfig([
+                        'headers' => ['apns-priority' => '10', 'apns-push-type' => 'background'],
+                        'payload' => ['aps' => ['content-available' => 1]]
+                    ]);
 
                 $messaging->send($message);
 
