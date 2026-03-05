@@ -39,6 +39,8 @@ class ExecuteCampaigns extends Command
 
         foreach ($activeAssignments as $assignment) {
             try {
+                // Refresh models from DB to avoid any stale data issues during 5-minute gaps
+                $assignment->refresh(); 
                 $campaign = $assignment->campaign;
                 $device = $assignment->device;
 
@@ -58,31 +60,35 @@ class ExecuteCampaigns extends Command
 
                 // 2. Stable Shuffle
                 $assignedAt = $assignment->assigned_at ?? $assignment->created_at ?? now();
-                $seed = "{$assignment->device_id}_{$assignment->campaign_id}_{$assignedAt->timestamp}";
+                $seed = "{$assignment->device_id}_{$assignment->campaign_id}_" . (int)$assignedAt->timestamp;
                 $shuffledTracks = $tracks->sortBy(fn($t) => md5($seed . $t->id))->values();
                 $trackCount = $shuffledTracks->count();
 
                 // 3. Find current position
                 $currentIndex = $shuffledTracks->search(function ($t) use ($assignment) {
-                    return ($assignment->campaign_track_id && $t->id === $assignment->campaign_track_id) || $t->media_url === $assignment->media_url;
+                    return ($assignment->campaign_track_id && (int)$t->id === (int)$assignment->campaign_track_id) 
+                        || $t->media_url === $assignment->media_url;
                 });
 
                 if ($currentIndex === false) {
-                    $this->warn("    ! Current track not in list. Resetting to start.");
-                    $currentIndex = $trackCount - 1; // Loops to 0 below
+                    $this->warn("    ! Current track position lost. Refreshing from start.");
+                    $currentIndex = $trackCount - 1; // Loops back to 0
                 }
 
                 // 4. Timing Check
-                $playedSeconds = now()->diffInSeconds($assignment->started_at);
+                // Note: since cron runs every 5 mins, playedSeconds will often be much higher than duration
+                $startedAt = $assignment->started_at ?? $assignment->created_at ?? now()->subHours(1);
+                $playedSeconds = now()->diffInSeconds($startedAt);
+                
                 $track = $shuffledTracks->get($currentIndex);
                 $duration = $track ? ($track->duration_seconds ?? 180) : 180;
-                $buffer = rand(2, 8);
+                $buffer = rand(2, 6);
                 $threshold = $duration + $buffer;
 
                 $this->line("    * Track: " . Str::limit($assignment->media_url, 30) . " | Played: {$playedSeconds}s | Target: {$threshold}s");
 
                 if (!$force && $playedSeconds < $threshold) {
-                    $this->line("      - Not time to advance yet (" . ($threshold - $playedSeconds) . "s remaining).");
+                    $this->line("      - Not time to advance yet (" . ($threshold - $playedSeconds) . "s remaining). Wait for next 5-min cron.");
                     continue;
                 }
 
@@ -97,14 +103,14 @@ class ExecuteCampaigns extends Command
                 $message = CloudMessage::withTarget('token', $device->fcm_token)
                     ->withData([
                         'command'       => $command,
-                        'track_id'      => $nextTrack->media_url,
-                        'youtube_url'   => $nextTrack->media_url,
-                        'media_url'     => $nextTrack->media_url,
-                        'track_title'   => $nextTrack->media_title ?? '',
+                        'track_id'      => (string)$nextTrack->media_url,
+                        'youtube_url'   => (string)$nextTrack->media_url,
+                        'media_url'     => (string)$nextTrack->media_url,
+                        'track_title'   => (string)($nextTrack->media_title ?? ''),
                         'action'        => 'play',
-                        'platform'      => $campaign->platform,
-                        'assignment_id' => (string) $assignment->id,
-                        'timestamp'     => (string) now()->timestamp,
+                        'platform'      => (string)$campaign->platform,
+                        'assignment_id' => (string)$assignment->id,
+                        'timestamp'     => (string)now()->timestamp,
                         'command_id'    => Str::uuid()->toString(),
                     ])
                     ->withAndroidConfig(['priority' => 'high', 'ttl' => '3600s']);
@@ -112,17 +118,18 @@ class ExecuteCampaigns extends Command
                 $messaging->send($message);
 
                 // 7. Update Database
+                // Using update on the assignment model specifically to avoid 'stdClass' warns
                 $assignment->update([
-                    'campaign_track_id' => $nextTrack->id,
-                    'media_url'         => $nextTrack->media_url,
-                    'media_title'       => $nextTrack->media_title ?? $campaign->name . ' - Track ' . ($nextIndex + 1),
+                    'campaign_track_id' => (int)$nextTrack->id,
+                    'media_url'         => (string)$nextTrack->media_url,
+                    'media_title'       => (string)($nextTrack->media_title ?? $campaign->name . ' - Track ' . ($nextIndex + 1)),
                     'started_at'        => now(),
                 ]);
 
                 $device->update(['last_seen' => now()]);
                 $advanced++;
                 
-                $this->info("    + Database Updated Successfully.");
+                $this->info("    + Database Updated.");
 
             } catch (\Exception $e) {
                 $this->error("    ! ERROR: " . $e->getMessage());
