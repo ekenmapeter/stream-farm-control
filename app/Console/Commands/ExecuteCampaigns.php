@@ -75,20 +75,21 @@ class ExecuteCampaigns extends Command
                     $currentIndex = $trackCount - 1; // Loops back to 0
                 }
 
-                // 4. Timing Check
-                // Note: since cron runs every 5 mins, playedSeconds will often be much higher than duration
-                $startedAt = $assignment->started_at ?? $assignment->created_at ?? now()->subHours(1);
-                $playedSeconds = now()->diffInSeconds($startedAt);
+                // 4. Timing Check (Force UTC for comparison to avoid timezone mismatches)
+                $startedAt = ($assignment->started_at ?? $assignment->created_at ?? now())->timezone('UTC');
+                $currentTime = now()->timezone('UTC');
+                $playedSeconds = $currentTime->diffInSeconds($startedAt);
                 
                 $track = $shuffledTracks->get($currentIndex);
                 $duration = $track ? ($track->duration_seconds ?? 180) : 180;
                 $buffer = rand(2, 6);
                 $threshold = $duration + $buffer;
 
-                $this->line("    * Track: " . Str::limit($assignment->media_url, 30) . " | Played: {$playedSeconds}s | Target: {$threshold}s");
+                $this->line("    * Timezone: " . config('app.timezone') . " | Server UTC: " . $currentTime->toDateTimeString());
+                $this->line("    * Started At (UTC): " . $startedAt->toDateTimeString() . " | Played: {$playedSeconds}s | Target: {$threshold}s");
 
                 if (!$force && $playedSeconds < $threshold) {
-                    $this->line("      - Not time to advance yet (" . ($threshold - $playedSeconds) . "s remaining). Wait for next 5-min cron.");
+                    $this->line("      - Wait: Still need " . ($threshold - $playedSeconds) . "s more. (Next check in 5-min cron)");
                     continue;
                 }
 
@@ -123,7 +124,7 @@ class ExecuteCampaigns extends Command
                     'campaign_track_id' => (int)$nextTrack->id,
                     'media_url'         => (string)$nextTrack->media_url,
                     'media_title'       => (string)($nextTrack->media_title ?? $campaign->name . ' - Track ' . ($nextIndex + 1)),
-                    'started_at'        => now(),
+                    'started_at'        => now()->timezone('UTC'),
                 ]);
 
                 $device->update(['last_seen' => now()]);
