@@ -40,33 +40,54 @@ class ExecuteCampaigns extends Command
             $campaign = $assignment->campaign;
             $device = $assignment->device;
 
-            if (!$track || !$campaign || !$device || !$device->fcm_token) {
+            if (!$campaign || !$device || !$device->fcm_token) {
                 continue;
-            }
-
-            // Check if the track has been playing longer than its duration
-            $playedSeconds = now()->diffInSeconds($assignment->started_at);
-            $duration = $track->duration_seconds ?? 180;
-
-            // Add a small random buffer (0-20 seconds) to look more natural
-            $buffer = rand(0, 20);
-
-            if ($playedSeconds < ($duration + $buffer)) {
-                continue; // Not time yet
             }
 
             // Get all tracks for this campaign in order
             $tracks = $campaign->tracks()->orderBy('position_order')->get();
-            if ($tracks->isEmpty()) continue;
+            if ($tracks->isEmpty()) {
+                $this->warn("Device {$device->name}: Campaign {$campaign->id} has no tracks.");
+                continue;
+            }
 
-            // Find the next track (loop back to first if at the end)
-            $currentIndex = $tracks->search(function ($t) use ($track) {
-                return $t->id === $track->id;
-            });
+            // Determine current track index
+            $currentIndex = -1;
+            if ($track) {
+                $currentIndex = $tracks->search(function ($t) use ($track) {
+                    return $t->id === $track->id || $t->media_url === $track->media_url;
+                });
+            }
 
+            // Fallback: if track is missing or ID changed (e.g. campaign update), find by URL or default to -1 (start fresh)
+            if ($currentIndex === false || $currentIndex === -1) {
+                $currentIndex = $tracks->search(function ($t) use ($assignment) {
+                    return $t->media_url === $assignment->media_url;
+                });
+                
+                if ($currentIndex === false) {
+                    $this->warn("Device {$device->name}: Current track not found in campaign track list. Resetting to first track.");
+                    $currentIndex = $tracks->count() - 1; // Set so it loops to index 0 below
+                }
+            }
+
+            // Check timing
+            $playedSeconds = now()->diffInSeconds($assignment->started_at ?? now()->subDays(1));
+            // If track is missing, use a default 180s duration
+            $duration = $track ? ($track->duration_seconds ?? 180) : 180;
+
+            // Reduced buffer for better responsiveness (2 to 8 seconds)
+            $buffer = rand(2, 8);
+
+            if ($playedSeconds < ($duration + $buffer)) {
+                // Not time yet
+                continue; 
+            }
+
+            // Advance to next index
             $nextIndex = ($currentIndex !== false && $currentIndex < $tracks->count() - 1)
                 ? $currentIndex + 1
-                : 0; // Loop back to beginning
+                : 0;
 
             $nextTrack = $tracks[$nextIndex];
 
@@ -80,6 +101,7 @@ class ExecuteCampaigns extends Command
                         'track_id'      => $nextTrack->media_url,
                         'youtube_url'   => $nextTrack->media_url,
                         'media_url'     => $nextTrack->media_url,
+                        'track_title'   => $nextTrack->media_title ?? '',
                         'action'        => 'play',
                         'platform'      => $campaign->platform,
                         'assignment_id' => (string) $assignment->id,
@@ -107,22 +129,21 @@ class ExecuteCampaigns extends Command
 
                 $this->info("Device {$device->name}: Advanced to track " . ($nextIndex + 1) . " - {$nextTrack->media_url}");
                 
-                // Log to Dashboard
+                // Dashboard Logging
                 DeviceLog::create([
                     'device_id' => $device->id,
                     'level'     => 'info',
-                    'message'   => "Campaign Advance: Switched to Track " . ($nextIndex + 1) . " - " . ($nextTrack->media_title ?? 'Unnamed'),
-                    'metadata'  => ['campaign_id'=>$campaign->id, 'track_url'=>$nextTrack->media_url]
+                    'message'   => "Campaign Advance: Switched to Track " . ($nextIndex + 1) . " (" . ($nextTrack->media_title ?? 'Unnamed') . ")",
+                    'metadata'  => ['campaign_id'=>$campaign->id, 'track_url'=>$nextTrack->media_url, 'track_index'=>$nextIndex]
                 ]);
 
             } catch (\Exception $e) {
                 $this->error("Device {$device->name}: Failed to advance - {$e->getMessage()}");
                 
-                // Log Error to Dashboard
                 DeviceLog::create([
                     'device_id' => $device->id,
                     'level'     => 'error',
-                    'message'   => "Campaign Error: Failed to advance to next track: " . $e->getMessage(),
+                    'message'   => "Campaign Error: Failed to advance to track " . ($nextIndex+1) . ": " . $e->getMessage(),
                     'metadata'  => ['campaign_id'=>$campaign->id]
                 ]);
             }
