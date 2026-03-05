@@ -79,6 +79,11 @@
         .slide-in {
             animation: slideIn 0.3s ease-out;
         }
+
+        /* Modal fix - ensure flex when visible */
+        [id$="Modal"]:not(.hidden) {
+            display: flex !important;
+        }
     </style>
 </head>
 

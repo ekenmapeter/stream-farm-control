@@ -500,37 +500,50 @@ document.addEventListener('DOMContentLoaded', function() {
     let lastStatsState = '';
     const deviceStatuses = {}; // Local cache to track changes
     let firstLoadDone = false;
+    let pollTimer = null;
 
     // Sounds
     const sounds = {
-        online: new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'), // Crisp ping
-        offline: new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3') // Soft alert
+        online: new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'),
+        offline: new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3')
     };
 
     function updateLiveDashboard() {
-        fetch('/api/dashboard/stats', { headers: headers })
-        .then(r => r.json())
+        if (pollTimer) clearTimeout(pollTimer);
+        
+        // Cache bust with timestamp, ensure we don't use disk cache
+        fetch(`/api/dashboard/stats?t=${Date.now()}`, { 
+            headers: headers,
+            cache: 'no-store'
+        })
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP Error: ${r.status}`);
+            return r.json();
+        })
         .then(data => {
             if (!data.success) return;
 
-            // Update Device Statuses & Play Sounds on Change
+            // 1. Process Device Updates
             data.devices.forEach(device => {
                 const oldStatus = deviceStatuses[device.id];
                 const newStatus = device.status;
 
+                // Handle status change sounds/notifications
                 if (firstLoadDone && oldStatus !== undefined && oldStatus !== newStatus) {
                     if ((oldStatus === 'offline') && (newStatus === 'online' || newStatus === 'streaming')) {
-                        sounds.online.play().catch(e => console.log('Audio blocked', e));
+                        sounds.online.play().catch(() => {});
                         showNotification(`${device.name || 'Device'} is now ONLINE`, 'success');
                     } else if (newStatus === 'offline' && oldStatus !== 'offline') {
-                        sounds.offline.play().catch(e => console.log('Audio blocked', e));
+                        sounds.offline.play().catch(() => {});
                         showNotification(`${device.name || 'Device'} went OFFLINE`, 'info');
                     }
                 }
                 deviceStatuses[device.id] = newStatus;
 
-                // Update UI elements for this device
+                // Update individual device cards
                 const card = document.getElementById(`device-card-${device.id}`);
+                const assignLabel = document.getElementById(`assign-device-${device.id}`);
+                
                 if (card) {
                     const config = {
                         online: { b:'bg-green-100', c:'text-green-600', i:'fa-wifi', d:'bg-green-500' },
@@ -538,50 +551,83 @@ document.addEventListener('DOMContentLoaded', function() {
                         offline: { b:'bg-gray-100', c:'text-gray-400', i:'fa-power-off', d:'bg-gray-400' }
                     }[newStatus] || { b:'bg-gray-100', c:'text-gray-400', i:'fa-power-off', d:'bg-gray-400' };
 
+                    // Update Icon Wrapper
                     const icoWrap = card.querySelector('.h-8.w-8.rounded-full');
-                    if (icoWrap) icoWrap.className = `h-8 w-8 rounded-full ${config.b} flex items-center justify-center`;
+                    if (icoWrap && !icoWrap.className.includes(config.b)) {
+                        icoWrap.className = `h-8 w-8 rounded-full ${config.b} flex items-center justify-center`;
+                    }
                     
+                    // Update Icon
                     const ico = card.querySelector('.h-8.w-8 i');
-                    if (ico) ico.className = `fas ${config.i} ${config.c} text-xs`;
+                    if (ico && !ico.className.includes(config.i)) {
+                        ico.className = `fas ${config.i} ${config.c} text-xs`;
+                    }
 
+                    // Update Dot
                     const dot = card.querySelector('.absolute.-bottom-0.5.-right-0.5');
-                    if (dot) dot.className = `absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ${config.d} border-2 border-white ${newStatus !== 'offline' ? 'pulse-dot' : ''}`;
+                    if (dot) {
+                        dot.className = `absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ${config.d} border-2 border-white ${newStatus !== 'offline' ? 'pulse-dot' : ''}`;
+                    }
 
+                    // Update Status Text
                     const timeP = card.querySelector('p.text-xs.text-gray-400');
-                    if (timeP && newStatus !== 'offline') timeP.textContent = 'Active now';
+                    if (timeP && newStatus !== 'offline') {
+                        timeP.textContent = 'Active now';
+                    }
                 }
 
-                const assignLabel = document.getElementById(`assign-device-${device.id}`);
                 if (assignLabel) {
                     const cb = assignLabel.querySelector('input');
                     const isOffline = newStatus === 'offline';
-                    cb.disabled = isOffline;
-                    assignLabel.classList.toggle('opacity-50', isOffline);
+                    if (cb.disabled !== isOffline) {
+                        cb.disabled = isOffline;
+                        assignLabel.classList.toggle('opacity-50', isOffline);
+                    }
                 }
             });
 
-            firstLoadDone = true;
-
-            // Generate a state string to check for other changes (counts, assignments)
+            // 2. Global State Changes (counts and tasks)
             const state = JSON.stringify({
                 counts: data.counts,
-                tasks: data.activeAssignments.map(a => ({id:a.id, s:a.status}))
+                tasks: (data.activeAssignments || []).map(a => ({id:a.id, s:a.status, d:a.device_id}))
             });
 
-            if (state === lastStatsState) return;
-            lastStatsState = state;
+            if (state !== lastStatsState) {
+                // Check if we need a full refresh (new devices added or task list changed significantly)
+                const currentCards = document.querySelectorAll('[id^="device-card-"]').length;
+                const currentTasks = document.querySelectorAll('[data-assignment-id]').length;
+                
+                if (firstLoadDone) {
+                    if (data.devices.length > currentCards) {
+                        showNotification('New device detected! Refresh for full list.', 'info');
+                    } else if (data.activeAssignments && data.activeAssignments.length !== currentTasks) {
+                        // For tasks, we might want to be more subtle or actually refresh the task list
+                        // But since it's a "Farm", tasks change often.
+                    }
+                }
 
-            // Update Counter Cards
-            updateText('stat-online', data.counts.online);
-            updateText('stat-streaming', data.counts.streaming);
-            updateText('stat-offline', data.counts.offline);
-            updateText('stat-total', data.counts.total);
-            updateText('stat-active', data.counts.activeTasks);
-            updateText('nav-total-count', data.counts.total);
-            updateText('nav-active-count', data.counts.activeTasks);
-            updateText('device-count-badge', data.counts.total);
+                lastStatsState = state;
+
+                // Update Counter Cards
+                updateText('stat-online', data.counts.online);
+                updateText('stat-streaming', data.counts.streaming);
+                updateText('stat-offline', data.counts.offline);
+                updateText('stat-total', data.counts.total);
+                updateText('stat-active', data.counts.activeTasks);
+                updateText('nav-total-count', data.counts.total);
+                updateText('nav-active-count', data.counts.activeTasks);
+                updateText('device-count-badge', data.counts.total);
+            }
+
+            firstLoadDone = true;
         })
-        .catch(err => console.warn('Dash poll failed:', err));
+        .catch(err => {
+            console.warn('Dash poll failed:', err);
+        })
+        .finally(() => {
+            // Schedule next poll - 3 seconds for better responsiveness
+            pollTimer = setTimeout(updateLiveDashboard, 3000);
+        });
     }
 
     function updateText(id, val) {
@@ -589,7 +635,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (el && el.textContent != val) el.textContent = val;
     }
 
-    // Poll every 5 seconds for snappy updates
-    setInterval(updateLiveDashboard, 5000);
+    // Initialize Dashboard Update immediately
+    updateLiveDashboard();
 });
 </script>

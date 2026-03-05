@@ -1,5 +1,5 @@
 <!-- Manual Register Modal -->
-<div id="manualRegisterModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+<div id="manualRegisterModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] items-center justify-center hidden">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div class="bg-slate-800 px-6 py-4 flex items-center justify-between">
             <h3 class="text-lg font-bold text-white"><i class="fas fa-plus-circle mr-2 text-primary-400"></i>Manual Device Registration</h3>
@@ -31,7 +31,7 @@
 </div>
 
 <!-- Play on Single Device Modal -->
-<div id="playDeviceModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+<div id="playDeviceModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] items-center justify-center hidden">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div class="bg-gradient-to-r from-primary-600 to-blue-500 px-6 py-4 flex items-center justify-between">
             <h3 class="text-lg font-bold text-white"><i class="fas fa-play-circle mr-2"></i>Assign to Device</h3>
@@ -77,7 +77,7 @@
 </div>
 
 <!-- Deploy Campaign Modal -->
-<div id="deployCampaignModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+<div id="deployCampaignModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] items-center justify-center hidden">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
         <div class="bg-gradient-to-r from-emerald-600 to-green-500 px-6 py-4 flex items-center justify-between">
             <div>
@@ -128,7 +128,7 @@
     </div>
 </div>
 <!-- Edit Campaign Modal -->
-<div id="editCampaignModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+<div id="editCampaignModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] items-center justify-center hidden">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
         <div class="bg-gradient-to-r from-amber-600 to-amber-500 px-6 py-4 flex items-center justify-between">
             <h3 class="text-lg font-bold text-white"><i class="fas fa-edit mr-2"></i>Edit Campaign</h3>
