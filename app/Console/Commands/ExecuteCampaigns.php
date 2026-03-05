@@ -44,39 +44,34 @@ class ExecuteCampaigns extends Command
                 continue;
             }
 
-            // Get all tracks for this campaign in order
+            // Get all tracks for this campaign
             $tracks = $campaign->tracks()->orderBy('position_order')->get();
             if ($tracks->isEmpty()) {
                 $this->warn("Device {$device->name}: Campaign {$campaign->id} has no tracks.");
                 continue;
             }
 
-            // Determine current track index
-            $currentIndex = -1;
-            if ($track) {
-                $currentIndex = $tracks->search(function ($t) use ($track) {
-                    return $t->id === $track->id || $t->media_url === $track->media_url;
-                });
-            }
+            // Stable Shuffle: reproduces the sequence decided at deployment
+            $shuffledTracks = $tracks->sortBy(fn($t) => md5($assignment->id . $t->id))->values();
 
-            // Fallback: if track is missing or ID changed (e.g. campaign update), find by URL or default to -1 (start fresh)
-            if ($currentIndex === false || $currentIndex === -1) {
-                $currentIndex = $tracks->search(function ($t) use ($assignment) {
-                    return $t->media_url === $assignment->media_url;
-                });
-                
-                if ($currentIndex === false) {
-                    $this->warn("Device {$device->name}: Current track not found in campaign track list. Resetting to first track.");
-                    $currentIndex = $tracks->count() - 1; // Set so it loops to index 0 below
-                }
+            // Determine current track index in HIS shuffled list
+            $currentIndex = $shuffledTracks->search(function ($t) use ($assignment) {
+                return ($assignment->campaign_track_id && $t->id === $assignment->campaign_track_id) || $t->media_url === $assignment->media_url;
+            });
+
+            // Fallback: start fresh if current track not found
+            if ($currentIndex === false) {
+                $this->warn("Device {$device->name}: Current track position lost. Resetting sequence.");
+                $currentIndex = $shuffledTracks->count() - 1;
             }
 
             // Check timing
             $playedSeconds = now()->diffInSeconds($assignment->started_at ?? now()->subDays(1));
-            // If track is missing, use a default 180s duration
-            $duration = $track ? ($track->duration_seconds ?? 180) : 180;
+            // Get duration of the track we JUST finished (if available)
+            $trackInList = $shuffledTracks->get($currentIndex);
+            $duration = $trackInList ? ($trackInList->duration_seconds ?? 180) : 180;
 
-            // Reduced buffer for better responsiveness (2 to 8 seconds)
+            // Buffer
             $buffer = rand(2, 8);
 
             if ($playedSeconds < ($duration + $buffer)) {
@@ -84,12 +79,12 @@ class ExecuteCampaigns extends Command
                 continue; 
             }
 
-            // Advance to next index
-            $nextIndex = ($currentIndex !== false && $currentIndex < $tracks->count() - 1)
+            // Advance to next index in the shuffled list
+            $nextIndex = ($currentIndex < $shuffledTracks->count() - 1)
                 ? $currentIndex + 1
                 : 0;
 
-            $nextTrack = $tracks[$nextIndex];
+            $nextTrack = $shuffledTracks[$nextIndex];
 
             // Send FCM command for the next track
             try {

@@ -152,7 +152,6 @@ class CampaignController extends Controller
             ], 422);
         }
 
-        $firstTrack = $tracks->first();
         $sendResults = ['successful' => 0, 'failed' => 0, 'errors' => []];
         $assignments = [];
 
@@ -165,16 +164,24 @@ class CampaignController extends Controller
                 ->whereIn('status', ['pending', 'playing', 'paused'])
                 ->update(['status' => 'stopped']);
 
-            // Create assignment pointing to first track
+            // Create assignment (we'll pick the track after we have an ID for stable randomization)
             $assignment = DeviceAssignment::create([
                 'device_id'         => $device->id,
                 'campaign_id'       => $campaign->id,
-                'campaign_track_id' => $firstTrack->id,
                 'platform'          => $campaign->platform,
-                'media_url'         => $firstTrack->media_url,
-                'media_title'       => $firstTrack->media_title ?? $campaign->name . ' - Track 1',
                 'status'            => 'pending',
                 'assigned_at'       => now(),
+            ]);
+
+            // Stable Shuffle: each assignment gets its own unique sequence based on its ID
+            $shuffledTracks = $tracks->sortBy(fn($t) => md5($assignment->id . $t->id))->values();
+            $firstTrack = $shuffledTracks->first();
+
+            // Update assignment with the first track of its randomized sequence
+            $assignment->update([
+                'campaign_track_id' => $firstTrack->id,
+                'media_url'         => $firstTrack->media_url,
+                'media_title'       => $firstTrack->media_title ?? $campaign->name . ' - ' . $firstTrack->media_url,
             ]);
 
             // Send FCM to start playing first track
