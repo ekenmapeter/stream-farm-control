@@ -51,8 +51,9 @@ class ExecuteCampaigns extends Command
                 continue;
             }
 
-            // Stable Shuffle: reproduces the sequence decided at deployment
-            $shuffledTracks = $tracks->sortBy(fn($t) => md5($assignment->id . $t->id))->values();
+            // Stable Shuffle: reproduces the exact sequence decided at deployment
+            $seed = "{$assignment->device_id}_{$assignment->campaign_id}_{$assignment->assigned_at->timestamp}";
+            $shuffledTracks = $tracks->sortBy(fn($t) => md5($seed . $t->id))->values();
 
             // Determine current track index in HIS shuffled list
             $currentIndex = $shuffledTracks->search(function ($t) use ($assignment) {
