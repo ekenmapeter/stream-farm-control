@@ -78,10 +78,10 @@ class ExecuteCampaigns extends Command
                 });
 
                 if ($currentIndex === false) {
-                    $msg = "Asgn #{$assignment->id}: Track position lost. Resetting to start.";
+                    $msg = "Asgn #{$assignment->id}: Track position lost. Resetting to first track.";
                     $this->warn($msg);
                     Log::info($msg);
-                    $currentIndex = $trackCount - 1;
+                    $currentIndex = 0;
                 }
 
                 // Timing Check
@@ -90,9 +90,10 @@ class ExecuteCampaigns extends Command
                 $playedSeconds = $currentTime->diffInSeconds($startedAt);
 
                 $track = $shuffledTracks->get($currentIndex);
-                $duration = $track ? ($track->duration_seconds ?? 180) : 180;
-                $buffer = rand(2, 6);
-                $threshold = $duration + $buffer;
+                // Use the track's actual duration_seconds (default 180s if not set).
+                // Add a small 2s grace period to account for cron scheduling jitter.
+                $duration  = $track ? (int)($track->duration_seconds ?? 180) : 180;
+                $threshold = $duration + 2;
 
                 $msg = "Asgn #{$assignment->id}: Track '{$assignment->media_url}' | Played: {$playedSeconds}s | Goal: {$threshold}s | Start(UTC): " . $startedAt->toDateTimeString();
                 $this->line($msg);
@@ -117,15 +118,16 @@ class ExecuteCampaigns extends Command
 
                 $message = CloudMessage::withTarget('token', $device->fcm_token)
                     ->withData([
-                        'command'       => $command,
-                        'track_id'      => (string)$nextTrack->media_url,
-                        'youtube_url'   => (string)$nextTrack->media_url,
-                        'media_url'     => (string)$nextTrack->media_url,
-                        'action'        => 'play',
-                        'platform'      => (string)$campaign->platform,
-                        'assignment_id' => (string)$assignment->id,
-                        'timestamp'     => (string)now()->timestamp,
-                        'command_id'    => Str::uuid()->toString(),
+                        'command'          => $command,
+                        'track_id'         => (string)$nextTrack->media_url,
+                        'youtube_url'      => (string)$nextTrack->media_url,
+                        'media_url'        => (string)$nextTrack->media_url,
+                        'duration_seconds' => (string)($nextTrack->duration_seconds ?? 180),
+                        'action'           => 'play',
+                        'platform'         => (string)$campaign->platform,
+                        'assignment_id'    => (string)$assignment->id,
+                        'timestamp'        => (string)now()->timestamp,
+                        'command_id'       => Str::uuid()->toString(),
                     ])
                     ->withAndroidConfig(['priority' => 'high', 'ttl' => '3600s'])
                     ->withApnsConfig([

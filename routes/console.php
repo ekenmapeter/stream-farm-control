@@ -9,4 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // ── Campaign auto-advance: check every minute and switch tracks ──────
-Schedule::command('campaigns:execute')->everyFiveMinutes();
+Schedule::command('campaigns:execute')->everyMinute();
