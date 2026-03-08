@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Models\DeviceAssignment;
 use App\Models\CampaignTrack;
 use App\Models\DeviceLog;
@@ -19,7 +21,7 @@ class ExecuteCampaigns extends Command
     {
         $force = $this->option('force');
         $messaging = $this->getMessaging();
-        
+
         if (!$messaging) {
             $this->error("CRITICAL: Firebase Messaging not initialized. Check credentials.");
             return 1;
@@ -33,56 +35,60 @@ class ExecuteCampaigns extends Command
             ->get();
 
         $this->info("[" . now()->toDateTimeString() . "] ExecuteCampaigns: Found " . $activeAssignments->count() . " active playing assignments.");
-        \Illuminate\Support\Facades\Log::info("ExecuteCampaigns: Found " . $activeAssignments->count() . " active assignments.");
+        Log::info("ExecuteCampaigns: Found " . $activeAssignments->count() . " active assignments.");
 
         $advanced = 0;
 
         foreach ($activeAssignments as $assignment) {
+            // Use a database transaction to ensure consistency
+            DB::beginTransaction();
             try {
-                $assignment->refresh(); 
+                $assignment->refresh();
                 $campaign = $assignment->campaign;
                 $device = $assignment->device;
 
                 if (!$campaign || !$device || !$device->fcm_token) {
                     $msg = "Asgn #{$assignment->id}: Skipping (Missing Device/Token/Campaign)";
                     $this->warn($msg);
-                    \Illuminate\Support\Facades\Log::info($msg);
+                    Log::info($msg);
+                    DB::rollBack();
                     continue;
                 }
 
-                // 1. Get/Refresh tracks
+                // Get/Refresh tracks
                 $tracks = $campaign->tracks()->orderBy('position_order')->get();
                 if ($tracks->isEmpty()) {
                     $msg = "Asgn #{$assignment->id}: Campaign has no tracks.";
                     $this->warn($msg);
-                    \Illuminate\Support\Facades\Log::info($msg);
+                    Log::info($msg);
+                    DB::rollBack();
                     continue;
                 }
 
-                // 2. Stable Shuffle
+                // Stable Shuffle
                 $assignedAt = $assignment->assigned_at ?? $assignment->created_at ?? now();
                 $seed = "{$assignment->device_id}_{$assignment->campaign_id}_" . (int)$assignedAt->timestamp;
                 $shuffledTracks = $tracks->sortBy(fn($t) => md5($seed . $t->id))->values();
                 $trackCount = $shuffledTracks->count();
 
-                // 3. Find current position
+                // Find current position
                 $currentIndex = $shuffledTracks->search(function ($t) use ($assignment) {
-                    return ($assignment->campaign_track_id && (int)$t->id === (int)$assignment->campaign_track_id) 
+                    return ($assignment->campaign_track_id && (int)$t->id === (int)$assignment->campaign_track_id)
                         || $t->media_url === $assignment->media_url;
                 });
 
                 if ($currentIndex === false) {
                     $msg = "Asgn #{$assignment->id}: Track position lost. Resetting to start.";
                     $this->warn($msg);
-                    \Illuminate\Support\Facades\Log::info($msg);
-                    $currentIndex = $trackCount - 1; 
+                    Log::info($msg);
+                    $currentIndex = $trackCount - 1;
                 }
 
-                // 4. Timing Check
+                // Timing Check
                 $startedAt = ($assignment->started_at ?? $assignment->created_at ?? now())->timezone('UTC');
                 $currentTime = now()->timezone('UTC');
                 $playedSeconds = $currentTime->diffInSeconds($startedAt);
-                
+
                 $track = $shuffledTracks->get($currentIndex);
                 $duration = $track ? ($track->duration_seconds ?? 180) : 180;
                 $buffer = rand(2, 6);
@@ -90,22 +96,23 @@ class ExecuteCampaigns extends Command
 
                 $msg = "Asgn #{$assignment->id}: Track '{$assignment->media_url}' | Played: {$playedSeconds}s | Goal: {$threshold}s | Start(UTC): " . $startedAt->toDateTimeString();
                 $this->line($msg);
-                \Illuminate\Support\Facades\Log::info($msg);
+                Log::info($msg);
 
                 if (!$force && $playedSeconds < $threshold) {
                     $this->line("      - Not time yet.");
+                    DB::rollBack();
                     continue;
                 }
 
-                // 5. Determine Next Track
+                // Determine Next Track
                 $nextIndex = ($currentIndex < $trackCount - 1) ? $currentIndex + 1 : 0;
                 $nextTrack = $shuffledTracks[$nextIndex];
 
                 $msg = "Asgn #{$assignment->id}: >>> ADVANCING to Track #" . ($nextIndex + 1) . ": {$nextTrack->media_url}";
                 $this->info($msg);
-                \Illuminate\Support\Facades\Log::info($msg);
+                Log::info($msg);
 
-                // 6. Send Command
+                // Send Command
                 $command = $campaign->platform === 'spotify' ? 'play_spotify' : 'play_youtube';
 
                 $message = CloudMessage::withTarget('token', $device->fcm_token)
@@ -126,9 +133,16 @@ class ExecuteCampaigns extends Command
                         'payload' => ['aps' => ['content-available' => 1]]
                     ]);
 
-                $messaging->send($message);
+                try {
+                    $messaging->send($message);
+                } catch (\Kreait\Firebase\Exception\MessagingException $e) {
+                    Log::error("Asgn #{$assignment->id}: Firebase send failed: " . $e->getMessage());
+                    $this->error("Firebase send failed for assignment {$assignment->id}");
+                    DB::rollBack();
+                    continue;
+                }
 
-                // 7. Update Database
+                // Update Database
                 $assignment->update([
                     'campaign_track_id' => (int)$nextTrack->id,
                     'media_url'         => (string)$nextTrack->media_url,
@@ -137,14 +151,16 @@ class ExecuteCampaigns extends Command
                 ]);
 
                 $device->update(['last_seen' => now()]);
-                $advanced++;
-                
-                \Illuminate\Support\Facades\Log::info("Asgn #{$assignment->id}: Database Updated.");
 
+                DB::commit();
+                $advanced++;
+
+                Log::info("Asgn #{$assignment->id}: Database Updated.");
             } catch (\Exception $e) {
+                DB::rollBack();
                 $msg = "Asgn #{$assignment->id} ERROR: " . $e->getMessage();
                 $this->error($msg);
-                \Illuminate\Support\Facades\Log::error($msg);
+                Log::error($msg);
             }
         }
 
@@ -153,7 +169,7 @@ class ExecuteCampaigns extends Command
         } else {
             $this->comment("Process finished. No tracks were advanced in this run.");
         }
-        
+
         return 0;
     }
 
