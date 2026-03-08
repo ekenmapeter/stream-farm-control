@@ -15,11 +15,23 @@ use Kreait\Firebase\Factory;
 class ExecuteCampaigns extends Command
 {
     protected $signature = 'campaigns:execute {--force : Skip duration checks and advance immediately}';
-    protected $description = 'Advance campaign tracks on devices. Run every minute via cron.';
+    protected $description = 'Advance campaign tracks on devices. Loops internally every 60s to work within a 5-min cron limit.';
 
-    public function handle()
+    /**
+     * How long (seconds) the worker stays alive per cron invocation.
+     * Set to 290s (4 min 50 sec) so it exits safely before the next
+     * 5-minute cron fires, avoiding overlapping processes.
+     */
+    private int $maxRuntime = 290;
+
+    /**
+     * How many seconds to sleep between each internal check loop.
+     */
+    private int $checkInterval = 60;
+
+    public function handle(): int
     {
-        $force = $this->option('force');
+        $force     = $this->option('force');
         $messaging = $this->getMessaging();
 
         if (!$messaging) {
@@ -27,162 +39,229 @@ class ExecuteCampaigns extends Command
             return 1;
         }
 
-        $activeAssignments = DeviceAssignment::with(['device', 'campaign.tracks', 'campaignTrack'])
-            ->whereNotNull('campaign_id')
-            ->whereNotNull('campaign_track_id')
-            ->where('status', 'playing')
-            ->whereNotNull('started_at')
-            ->get();
+        $workerStart = time();
+        $iteration   = 0;
 
-        $this->info("[" . now()->toDateTimeString() . "] ExecuteCampaigns: Found " . $activeAssignments->count() . " active playing assignments.");
-        Log::info("ExecuteCampaigns: Found " . $activeAssignments->count() . " active assignments.");
+        Log::info("ExecuteCampaigns: Worker started. Will loop every {$this->checkInterval}s for up to {$this->maxRuntime}s.");
+        $this->info("[" . now()->toDateTimeString() . "] Worker started (max runtime: {$this->maxRuntime}s, check every {$this->checkInterval}s).");
 
-        $advanced = 0;
+        do {
+            $iteration++;
+            $iterationStart = time();
 
-        foreach ($activeAssignments as $assignment) {
-            // Use a database transaction to ensure consistency
-            DB::beginTransaction();
-            try {
-                $assignment->refresh();
-                $campaign = $assignment->campaign;
-                $device = $assignment->device;
+            $header = "[" . now()->toDateTimeString() . "] ── Iteration #{$iteration} ──────────────────────";
+            $this->info($header);
+            Log::info($header);
 
-                if (!$campaign || !$device || !$device->fcm_token) {
-                    $msg = "Asgn #{$assignment->id}: Skipping (Missing Device/Token/Campaign)";
-                    $this->warn($msg);
-                    Log::info($msg);
-                    DB::rollBack();
-                    continue;
+            // Fetch all active playing assignments fresh on every iteration
+            $activeAssignments = DeviceAssignment::with(['device', 'campaign.tracks', 'campaignTrack'])
+                ->whereNotNull('campaign_id')
+                ->whereNotNull('campaign_track_id')
+                ->where('status', 'playing')
+                ->whereNotNull('started_at')
+                ->get();
+
+            $count = $activeAssignments->count();
+            $countMsg = "Found {$count} active playing assignment(s).";
+            $this->line("  " . $countMsg);
+            Log::info("ExecuteCampaigns: " . $countMsg);
+
+            $advanced = 0;
+            foreach ($activeAssignments as $assignment) {
+                if ($this->processSingleAssignment($assignment, $messaging, $force)) {
+                    $advanced++;
                 }
-
-                // Get/Refresh tracks
-                $tracks = $campaign->tracks()->orderBy('position_order')->get();
-                if ($tracks->isEmpty()) {
-                    $msg = "Asgn #{$assignment->id}: Campaign has no tracks.";
-                    $this->warn($msg);
-                    Log::info($msg);
-                    DB::rollBack();
-                    continue;
-                }
-
-                // Stable Shuffle
-                $assignedAt = $assignment->assigned_at ?? $assignment->created_at ?? now();
-                $seed = "{$assignment->device_id}_{$assignment->campaign_id}_" . (int)$assignedAt->timestamp;
-                $shuffledTracks = $tracks->sortBy(fn($t) => md5($seed . $t->id))->values();
-                $trackCount = $shuffledTracks->count();
-
-                // Find current position
-                $currentIndex = $shuffledTracks->search(function ($t) use ($assignment) {
-                    return ($assignment->campaign_track_id && (int)$t->id === (int)$assignment->campaign_track_id)
-                        || $t->media_url === $assignment->media_url;
-                });
-
-                if ($currentIndex === false) {
-                    $msg = "Asgn #{$assignment->id}: Track position lost. Resetting to first track.";
-                    $this->warn($msg);
-                    Log::info($msg);
-                    $currentIndex = 0;
-                }
-
-                // Timing Check
-                $startedAt = ($assignment->started_at ?? $assignment->created_at ?? now())->timezone('UTC');
-                $currentTime = now()->timezone('UTC');
-                $playedSeconds = $currentTime->diffInSeconds($startedAt);
-
-                $track = $shuffledTracks->get($currentIndex);
-                // Use the track's actual duration_seconds (default 180s if not set).
-                // Add a small 2s grace period to account for cron scheduling jitter.
-                $duration  = $track ? (int)($track->duration_seconds ?? 180) : 180;
-                $threshold = $duration + 2;
-
-                $msg = "Asgn #{$assignment->id}: Track '{$assignment->media_url}' | Played: {$playedSeconds}s | Goal: {$threshold}s | Start(UTC): " . $startedAt->toDateTimeString();
-                $this->line($msg);
-                Log::info($msg);
-
-                if (!$force && $playedSeconds < $threshold) {
-                    $this->line("      - Not time yet.");
-                    DB::rollBack();
-                    continue;
-                }
-
-                // Determine Next Track
-                $nextIndex = ($currentIndex < $trackCount - 1) ? $currentIndex + 1 : 0;
-                $nextTrack = $shuffledTracks[$nextIndex];
-
-                $msg = "Asgn #{$assignment->id}: >>> ADVANCING to Track #" . ($nextIndex + 1) . ": {$nextTrack->media_url}";
-                $this->info($msg);
-                Log::info($msg);
-
-                // Send Command
-                $command = $campaign->platform === 'spotify' ? 'play_spotify' : 'play_youtube';
-
-                $message = CloudMessage::withTarget('token', $device->fcm_token)
-                    ->withData([
-                        'command'          => $command,
-                        'track_id'         => (string)$nextTrack->media_url,
-                        'youtube_url'      => (string)$nextTrack->media_url,
-                        'media_url'        => (string)$nextTrack->media_url,
-                        'duration_seconds' => (string)($nextTrack->duration_seconds ?? 180),
-                        'action'           => 'play',
-                        'platform'         => (string)$campaign->platform,
-                        'assignment_id'    => (string)$assignment->id,
-                        'timestamp'        => (string)now()->timestamp,
-                        'command_id'       => Str::uuid()->toString(),
-                    ])
-                    ->withAndroidConfig(['priority' => 'high', 'ttl' => '3600s'])
-                    ->withApnsConfig([
-                        'headers' => ['apns-priority' => '10', 'apns-push-type' => 'background'],
-                        'payload' => ['aps' => ['content-available' => 1]]
-                    ]);
-
-                try {
-                    $messaging->send($message);
-                } catch (\Kreait\Firebase\Exception\MessagingException $e) {
-                    Log::error("Asgn #{$assignment->id}: Firebase send failed: " . $e->getMessage());
-                    $this->error("Firebase send failed for assignment {$assignment->id}");
-                    DB::rollBack();
-                    continue;
-                }
-
-                // Update Database
-                $assignment->update([
-                    'campaign_track_id' => (int)$nextTrack->id,
-                    'media_url'         => (string)$nextTrack->media_url,
-                    'media_title'       => (string)($nextTrack->media_title ?? $campaign->name . ' - Track ' . ($nextIndex + 1)),
-                    'started_at'        => now()->timezone('UTC'),
-                ]);
-
-                $device->update(['last_seen' => now()]);
-
-                DB::commit();
-                $advanced++;
-
-                Log::info("Asgn #{$assignment->id}: Database Updated.");
-            } catch (\Exception $e) {
-                DB::rollBack();
-                $msg = "Asgn #{$assignment->id} ERROR: " . $e->getMessage();
-                $this->error($msg);
-                Log::error($msg);
             }
-        }
 
-        if ($advanced > 0) {
-            $this->info("Done! Successfully advanced {$advanced} device(s).");
-        } else {
-            $this->comment("Process finished. No tracks were advanced in this run.");
-        }
+            if ($advanced > 0) {
+                $this->info("  ✓ Advanced {$advanced} device(s) this iteration.");
+                Log::info("ExecuteCampaigns: Advanced {$advanced} device(s) in iteration #{$iteration}.");
+            } else {
+                $this->comment("  No tracks advanced this iteration.");
+            }
+
+            // Calculate how long until the next check should happen
+            $elapsed         = time() - $workerStart;
+            $timeLeftInRun   = $this->maxRuntime - $elapsed;
+            $iterationTook   = time() - $iterationStart;
+            $sleepFor        = max(0, $this->checkInterval - $iterationTook);
+
+            if ($timeLeftInRun <= $sleepFor + 5) {
+                // Not enough time for another full iteration — exit cleanly
+                break;
+            }
+
+            if ($sleepFor > 0) {
+                $this->line("  Sleeping {$sleepFor}s before next check...");
+                sleep($sleepFor);
+            }
+        } while ((time() - $workerStart) < $this->maxRuntime);
+
+        $totalRan = time() - $workerStart;
+        $doneMsg = "Worker finished after {$totalRan}s ({$iteration} iteration(s)). Next cron will restart it.";
+        $this->info("[" . now()->toDateTimeString() . "] " . $doneMsg);
+        Log::info("ExecuteCampaigns: " . $doneMsg);
 
         return 0;
     }
 
-    private function getMessaging()
+    /**
+     * Process a single assignment: check timing and advance the track if due.
+     * Returns true if the track was advanced, false otherwise.
+     */
+    private function processSingleAssignment(
+        DeviceAssignment $assignment,
+        mixed $messaging,
+        bool $force
+    ): bool {
+        DB::beginTransaction();
+        try {
+            $assignment->refresh();
+            $campaign = $assignment->campaign;
+            $device   = $assignment->device;
+
+            if (!$campaign || !$device || !$device->fcm_token) {
+                $msg = "Asgn #{$assignment->id}: Skipping — missing device, FCM token, or campaign.";
+                $this->warn("  " . $msg);
+                Log::info($msg);
+                DB::rollBack();
+                return false;
+            }
+
+            // Load tracks ordered by position
+            $tracks = $campaign->tracks()->orderBy('position_order')->get();
+            if ($tracks->isEmpty()) {
+                $msg = "Asgn #{$assignment->id}: Campaign has no tracks.";
+                $this->warn("  " . $msg);
+                Log::info($msg);
+                DB::rollBack();
+                return false;
+            }
+
+            // Stable deterministic shuffle (seed = device + campaign + assigned_at)
+            $assignedAt    = $assignment->assigned_at ?? $assignment->created_at ?? now();
+            $seed          = "{$assignment->device_id}_{$assignment->campaign_id}_" . (int)$assignedAt->timestamp;
+            $shuffledTracks = $tracks->sortBy(fn($t) => md5($seed . $t->id))->values();
+            $trackCount    = $shuffledTracks->count();
+
+            // Find the current track's position in the shuffled list
+            $currentIndex = $shuffledTracks->search(function ($t) use ($assignment) {
+                return ($assignment->campaign_track_id && (int)$t->id === (int)$assignment->campaign_track_id)
+                    || $t->media_url === $assignment->media_url;
+            });
+
+            if ($currentIndex === false) {
+                $msg = "Asgn #{$assignment->id}: Track position lost — resetting to first track.";
+                $this->warn("  " . $msg);
+                Log::info($msg);
+                $currentIndex = 0;
+            }
+
+            // ── Timing check ────────────────────────────────────────────
+            // Use raw Unix timestamps (always UTC) — avoids Carbon timezone
+            // sign-flip issues that caused negative playedSeconds.
+            $startedAtTs   = ($assignment->started_at ?? $assignment->created_at ?? now())->timestamp;
+            $nowTs         = time();
+            $playedSeconds = max(0, $nowTs - $startedAtTs);
+
+            $track     = $shuffledTracks->get($currentIndex);
+            $duration  = $track ? (int)($track->duration_seconds ?? 180) : 180;
+            $threshold = $duration + 2; // +2s grace for scheduling jitter
+            $remaining = max(0, $threshold - $playedSeconds);
+            $startedAtStr = date('Y-m-d H:i:s', $startedAtTs);
+
+            $statusMsg = "Asgn #{$assignment->id}: Played {$playedSeconds}s / {$duration}s"
+                . " | Remaining: {$remaining}s"
+                . " | Start(UTC): {$startedAtStr}"
+                . " | Track: " . basename($assignment->media_url ?? 'unknown');
+            $this->line("  " . $statusMsg);
+            Log::info($statusMsg);
+
+            if (!$force && $playedSeconds < $threshold) {
+                $skipMsg = "  └─ Asgn #{$assignment->id}: Not time yet ({$remaining}s remaining).";
+                $this->line($skipMsg);
+                Log::info($skipMsg);
+                DB::rollBack();
+                return false;
+            }
+            // ────────────────────────────────────────────────────────────
+
+            // Determine next track (wraps back to 0 at the end)
+            $nextIndex = ($currentIndex < $trackCount - 1) ? $currentIndex + 1 : 0;
+            $nextTrack = $shuffledTracks[$nextIndex];
+
+            $advanceMsg = "Asgn #{$assignment->id}: >>> ADVANCING to Track #" . ($nextIndex + 1) . ": {$nextTrack->media_url}";
+            $this->info("  " . $advanceMsg);
+            Log::info($advanceMsg);
+
+            // Build FCM command
+            $command = $campaign->platform === 'spotify' ? 'play_spotify' : 'play_youtube';
+
+            $message = CloudMessage::withTarget('token', $device->fcm_token)
+                ->withData([
+                    'command'          => $command,
+                    'track_id'         => (string)$nextTrack->media_url,
+                    'youtube_url'      => (string)$nextTrack->media_url,
+                    'media_url'        => (string)$nextTrack->media_url,
+                    'duration_seconds' => (string)($nextTrack->duration_seconds ?? 180),
+                    'action'           => 'play',
+                    'platform'         => (string)$campaign->platform,
+                    'assignment_id'    => (string)$assignment->id,
+                    'timestamp'        => (string)time(),
+                    'command_id'       => Str::uuid()->toString(),
+                ])
+                ->withAndroidConfig(['priority' => 'high', 'ttl' => '3600s'])
+                ->withApnsConfig([
+                    'headers' => ['apns-priority' => '10', 'apns-push-type' => 'background'],
+                    'payload' => ['aps' => ['content-available' => 1]],
+                ]);
+
+            // Send via Firebase — isolated catch so a send failure only
+            // rolls back this assignment, not the whole batch.
+            try {
+                $messaging->send($message);
+                Log::info("Asgn #{$assignment->id}: FCM command sent successfully.");
+            } catch (\Kreait\Firebase\Exception\MessagingException $e) {
+                $errMsg = "Asgn #{$assignment->id}: Firebase send FAILED — " . $e->getMessage();
+                Log::error($errMsg);
+                $this->error("  " . $errMsg);
+                DB::rollBack();
+                return false;
+            }
+
+            // Update the assignment to record the new current track
+            $assignment->update([
+                'campaign_track_id' => (int)$nextTrack->id,
+                'media_url'         => (string)$nextTrack->media_url,
+                'media_title'       => (string)($nextTrack->media_title ?? $campaign->name . ' - Track ' . ($nextIndex + 1)),
+                'started_at'        => now(),
+            ]);
+
+            $device->update(['last_seen' => now()]);
+
+            DB::commit();
+            $nextTrackNum = $nextIndex + 1;
+            Log::info("Asgn #{$assignment->id}: DB updated — now on track #{$nextTrackNum}.");
+            return true;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $errMsg = "Asgn #{$assignment->id} EXCEPTION: " . $e->getMessage();
+            $this->error("  " . $errMsg);
+            Log::error($errMsg);
+            return false;
+        }
+    }
+
+    /**
+     * Resolve a Firebase Messaging instance from the service-account JSON.
+     */
+    private function getMessaging(): mixed
     {
         $credentialsPath = base_path(config('firebase.credentials'));
 
         if (!file_exists($credentialsPath)) {
             $storagePath = storage_path('app');
-            $files = glob($storagePath . '/*.json');
-            foreach ($files as $file) {
+            foreach (glob($storagePath . '/*.json') as $file) {
                 if (str_contains($file, 'firebase-adminsdk')) {
                     $credentialsPath = $file;
                     break;
@@ -190,11 +269,14 @@ class ExecuteCampaigns extends Command
             }
         }
 
-        if (!file_exists($credentialsPath)) return null;
+        if (!file_exists($credentialsPath)) {
+            return null;
+        }
 
         try {
             return (new Factory)->withServiceAccount($credentialsPath)->createMessaging();
         } catch (\Exception $e) {
+            Log::error("ExecuteCampaigns: getMessaging() failed — " . $e->getMessage());
             return null;
         }
     }

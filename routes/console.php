@@ -8,5 +8,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// ── Campaign auto-advance: check every minute and switch tracks ──────
-Schedule::command('campaigns:execute')->everyMinute();
+// ── Campaign auto-advance ─────────────────────────────────────────────
+// The command self-loops every 60s internally for ~4m50s, so tracks are
+// checked every minute even though the cron only fires every 5 minutes.
+Schedule::command('campaigns:execute')->everyFiveMinutes()->withoutOverlapping();
